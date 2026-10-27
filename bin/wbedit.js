@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 // bin/wbedit.js — 世界书编辑器 CLI
-// 结构化命令编辑世界书 JSON，防止外部 AI / 手工直接改 JSON 把结构写坏。
-// 所有写操作经 core.js 规范化 + 原子写入。
+// 用法: wbedit <命令> [参数]
 
 'use strict';
 
@@ -9,24 +8,59 @@ const fs = require('fs');
 const path = require('path');
 const core = require('../lib/core.js');
 const schema = require('../lib/schema.js');
-const { validate } = require('../lib/validate.js');
 const io = require('../lib/io.js');
+const { validate } = require('../lib/validate.js');
 
-// ---------- 参数解析 ----------
+const args = process.argv.slice(2);
+const cmd = (args[0] || '').toLowerCase();
 
-function parseArgs(argv) {
-  const positional = [];
+function help() {
+  console.log(`世界书编辑器 CLI (兼容 SillyTavern V2/V3 + DSH-Tavern)
+
+用法:
+  wbedit <命令> [参数]
+
+命令:
+  list <文件>                        查看世界书基本信息（名称/描述/条目数）
+  meta <文件> [--name 名称] [--description 描述]   查看或修改世界书名称/描述（不传参数仅查看）
+  entries <文件>                     列出所有条目（uid / 触发词 / 注释 / 启用）
+  get <文件> <uid>                   查看单个条目
+  add <文件> --key 触发词 [--comment 注释] [--content 正文] [--constant] [--order 100] [--position 0] [--depth 4]
+                                     新增条目（--no-constant 表示非常驻）
+  update <文件> <uid> <字段=值>...    更新条目字段（如 comment=新注释 content=正文 key=甲,乙 constant=true）
+  remove <文件> <uid>...             删除条目
+  batch <文件> --enable|--disable|--remove [--uid 1 --uid 2 ...]
+                                     批量启用/禁用/删除（--uid 可多次）
+  search <文件> <关键词>             搜索条目（匹配 comment/content/key）
+  validate <文件>                    校验世界书（结构/重复 key/LLM 可见性）
+  export <文件> [--type classic|st3|png] [--out 路径]
+                                     导出（classic=原样 / st3=character_book / png=角色卡PNG）
+  import <来源> [--out 路径]         导入世界书（JSON 或角色卡 PNG/JSON；--out 缺省 导入/<文件名>.json）
+  web [--port 8099] [--no-browser]   启动 Web 界面
+  help                                显示本帮助
+
+示例:
+  wbedit list 世界书.json
+  wbedit meta 世界书.json --name 新名称 --description 说明文字
+  wbedit add 世界书.json --key 精灵 --comment 种族设定 --content 精灵是… --constant --order 10
+  wbedit export 世界书.json --type st3 --out 导出.json
+`);
+}
+
+function fail(msg) {
+  console.error('错误: ' + msg);
+  process.exit(1);
+}
+
+function readArgs() {
+  // 解析 --key value / --flag / 位置参数
   const flags = {};
-  for (let i = 0; i < argv.length; i++) {
-    const a = argv[i];
+  const positional = [];
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
     if (a.startsWith('--')) {
-      const eq = a.indexOf('=');
-      if (eq > 0) {
-        flags[a.slice(2, eq)] = a.slice(eq + 1);
-        continue;
-      }
       const key = a.slice(2);
-      const next = argv[i + 1];
+      const next = args[i + 1];
       if (next !== undefined && !next.startsWith('--')) {
         flags[key] = next;
         i++;
@@ -37,278 +71,210 @@ function parseArgs(argv) {
       positional.push(a);
     }
   }
-  return { positional, flags };
+  return { flags, positional };
 }
 
-function fail(msg) {
-  console.error('错误: ' + msg);
-  process.exit(1);
+function showEntry(e) {
+  console.log(`#${e.uid}  ${e.comment || '(无注释)'}`);
+  console.log(`  触发词: ${(e.key || []).join(', ') || '(无)'}`);
+  console.log(`  状态: ${e.constant ? '常驻' : ''}${e.disable ? '禁用' : '启用'}  order=${e.order || 0} pos=${e.position ?? 0}`);
+  console.log(`  内容: ${(e.content || '(空)').slice(0, 120)}${(e.content || '').length > 120 ? '…' : ''}`);
 }
 
-function help() {
-  console.log(`世界书编辑器 CLI
-用法: node wbedit.js <命令> [参数]
-
-命令:
-  create <文件> [名称]                    新建空世界书
-  list <文件> [--search 关键词]           列出条目
-  get <文件> <uid>                        查看条目详情
-  add <文件> --key "a,b" --content "..."  新增条目
-      [--comment 注释] [--constant] [--position 0-5] [--order N]
-      [--depth N] [--probability N] [--group 分组] [--sticky N]
-      [--selective] [--use_regex] [--role 0|1|2] [--caseSensitive] [--matchWholeWords]
-      [--keysecondary "x,y"] [--disable]
-  update <文件> <uid> --字段 值 [--字段2 值2 ...]
-      字段: key/keysecondary/comment/content/constant/disable/position/order/depth/
-            probability/useProbability/group/sticky/cooldown/delay/selective/
-            use_regex/selectiveLogic/role/caseSensitive/matchWholeWords/...
-      值规范: constant/disable/... 接受 true/false; key 接受逗号分隔
-  remove <文件> <uid>                     删除条目
-  batch <文件> <uid,uid,...> --disable|--enable|--toggle|--remove|--constant true|--set k=v
-  search <文件> <关键词> [--exact]        搜索条目
-  validate <文件>                         校验世界书（结构/冲突/LLM可见性）
-  import <来源文件> [--out 目标.json]      导入（来源可为 .json/.png 角色卡）
-  export <文件> [--type classic|st3] [--out 目标.json]   导出
-  export-card <文件> --image 底图.png --out 卡.png       世界书打包成角色卡 PNG
-  serve [--port 8080] [--open]            启动 Web 编辑界面
-
-示例:
-  node wbedit.js add wb.json --key "精灵,elf" --content "精灵是长寿种族..." --comment 种族设定 --constant
-  node wbedit.js update wb.json 3 --constant true --position 4
-  node wbedit.js import 角色卡.png --out wb.json
-`);
+function showWorldbook(wb, filePath) {
+  const entries = Object.values(wb.entries);
+  console.log(`文件: ${filePath}`);
+  console.log(`名称: ${wb.name || '(未命名)'}`);
+  console.log(`描述: ${wb.description || '(无)'}`);
+  console.log(`条目数: ${entries.length}`);
 }
 
-function getWb(file) {
-  return core.load(file);
-}
+// ---------- 命令分发 ----------
 
-function posName(p) {
-  return ['@', '#', '@#', '#@', '末尾', '开头'][p] || String(p);
-}
-
-function fmtEntry(e) {
-  const tag = [];
-  if (e.constant) tag.push('常驻');
-  if (e.disable) tag.push('禁用');
-  const keyStr = (e.key || []).join(',');
-  return '#' + e.uid + '\t[' + tag.join('') + ']\t' + (e.order || 0) + '/' + posName(e.position) + '\t' + (e.comment || '') + (keyStr ? '  ⟦' + keyStr.slice(0, 40) + '⟧' : '');
-}
-
-// ---------- 命令实现 ----------
-
-function cmdCreate(file, name) {
-  const r = core.create(file, name || '新世界书');
-  console.log('已创建 ' + r.filePath + '（' + r.entries + ' 个条目）');
-}
-
-function cmdList(file, flags) {
-  const wb = getWb(file);
-  let list = Object.values(wb.entries);
-  if (flags.search) list = core.search(wb, flags.search);
-  list.sort((a, b) => (a.order || 0) - (b.order || 0) || (a.uid || 0) - (b.uid || 0));
-  console.log('世界书: ' + (wb.name || file) + '（共 ' + list.length + ' 条）');
-  for (const e of list) console.log(fmtEntry(e));
-}
-
-function cmdGet(file, uid) {
-  const wb = getWb(file);
-  const e = wb.entries[String(uid)];
-  if (!e) fail('条目 #' + uid + ' 不存在');
-  console.log(JSON.stringify(e, null, 2));
-}
-
-function cmdAdd(file, flags) {
-  const wb = getWb(file);
-  const fields = {};
-  for (const k of Object.keys(flags)) {
-    if (k in schema.ENTRY_FIELDS) fields[k] = flags[k];
+async function main() {
+  if (cmd === 'help' || cmd === '--help' || cmd === '-h' || cmd === '') {
+    help();
+    return;
   }
-  const e = core.addEntry(wb, fields);
-  core.save(file, wb);
-  console.log('已添加条目 #' + e.uid + '（' + (e.comment || '无注释') + '）');
-}
 
-function cmdUpdate(file, uid, flags) {
-  const wb = getWb(file);
-  const fields = {};
-  for (const k of Object.keys(flags)) {
-    if (k in schema.ENTRY_FIELDS || k.includes('.')) fields[k] = flags[k];
-  }
-  if (Object.keys(fields).length === 0) fail('没有可更新的字段（--字段 值）');
-  const e = core.updateEntry(wb, uid, fields);
-  core.save(file, wb);
-  console.log('已更新条目 #' + uid + '：' + Object.keys(fields).join(', '));
-}
+  const { flags, positional } = readArgs();
 
-function cmdRemove(file, uid) {
-  const wb = getWb(file);
-  core.removeEntry(wb, uid);
-  core.save(file, wb);
-  console.log('已删除条目 #' + uid);
-}
-
-function cmdBatch(file, idsStr, flags) {
-  const wb = getWb(file);
-  const ids = String(idsStr).split(',').map(s => s.trim()).filter(Boolean);
-  let action = null;
-  let value;
-  for (const a of ['disable', 'enable', 'toggle', 'remove', 'constant', 'set']) {
-    if (flags[a] !== undefined) { action = a; value = flags[a]; break; }
-  }
-  if (!action) fail('需要指定 --disable / --enable / --toggle / --remove / --constant / --set');
-  if (action === 'set' && typeof value === 'string') {
-    const v = {};
-    for (const kv of value.split(';')) {
-      const [k, val] = kv.split('=');
-      if (k.trim()) v[k.trim()] = val === undefined ? true : val.trim();
+  switch (cmd) {
+    case 'list': {
+      if (!positional[1]) fail('用法: wbedit list <文件>');
+      const wb = core.load(positional[1]);
+      showWorldbook(wb, positional[1]);
+      for (const e of Object.values(wb.entries)) {
+        console.log(`  #${e.uid} ${(e.comment || '').slice(0, 30)} ${e.constant ? '[常驻]' : ''} ${e.disable ? '[禁用]' : ''}`);
+      }
+      return;
     }
-    value = v;
-  }
-  const r = core.batch(wb, ids, action, value);
-  core.save(file, wb);
-  console.log('批量' + action + ': 成功 ' + r.ok.length + (r.missing.length ? '，不存在 ' + r.missing.join(',') : ''));
-}
 
-function cmdSearch(file, q, flags) {
-  const wb = getWb(file);
-  const list = core.search(wb, q, { exact: !!flags.exact });
-  list.sort((a, b) => (a.order || 0) - (b.order || 0) || (a.uid || 0) - (b.uid || 0));
-  console.log('命中 ' + list.length + ' 条：');
-  for (const e of list) console.log(fmtEntry(e));
-}
-
-function cmdValidate(file) {
-  const wb = getWb(file);
-  const r = validate(wb);
-  console.log('校验结果: ' + (r.ok ? '通过' : r.errors.length + ' 个错误') + '（' + r.warnings.length + ' 个警告）');
-  for (const e of r.errors) console.log('  [错误] ' + e.message);
-  for (const w of r.warnings) console.log('  [警告] ' + w.message);
-  process.exitCode = r.ok ? 0 : 1;
-}
-
-function cmdImport(src, out) {
-  const r = io.importWorldbook(src);
-  if (out) {
-    core.save(out, r.wb);
-    console.log(r.note + ' → 已保存 ' + out + '（' + Object.keys(r.wb.entries).length + ' 条）');
-  } else {
-    console.log(r.note);
-    console.log(JSON.stringify(r.wb, null, 2));
-  }
-}
-
-function cmdExport(file, type, out) {
-  const wb = getWb(file);
-  const text = io.exportWorldbook(wb, type || 'classic');
-  if (out) {
-    fs.writeFileSync(out, text, 'utf8');
-    console.log('已导出（' + (type || 'classic') + '）→ ' + out);
-  } else {
-    console.log(text);
-  }
-}
-
-function cmdExportCard(file, image, out) {
-  const wb = getWb(file);
-  const v3card = {
-    spec: 'chara_card_v3',
-    spec_version: '3.0',
-    data: {
-      name: wb.name || '世界书',
-      description: wb.description || '',
-      character_book: schema.toCharacterBook(wb),
-    },
-  };
-  io.buildPngWithCard(image, v3card, out);
-  console.log('已生成角色卡 PNG → ' + out);
-}
-
-function cmdServe(flags) {
-  const port = Number(flags.port) || 8080;
-  const server = require('../lib/server.js');
-  server.start(port, !!flags.open, path.dirname(process.argv[1]) + '/..');
-}
-
-// ---------- 主入口 ----------
-
-function main() {
-  const { positional, flags } = parseArgs(process.argv.slice(2));
-  const cmd = positional[0];
-  if (!cmd || cmd === 'help' || cmd === '--help' || cmd === '-h') { help(); return; }
-
-  try {
-    switch (cmd) {
-      case 'create': {
-        if (!positional[1]) fail('缺少文件路径');
-        cmdCreate(positional[1], positional[2]);
-        break;
+    case 'meta': {
+      if (!positional[1]) fail('用法: wbedit meta <文件> [--name 名称] [--description 描述]');
+      const file = positional[1];
+      const wb = core.load(file);
+      const fields = {};
+      if (flags.name !== undefined) fields.name = flags.name;
+      if (flags.description !== undefined) fields.description = flags.description;
+      if (Object.keys(fields).length > 0) {
+        core.updateMeta(wb, fields);
+        core.save(file, wb);
+        console.log('已保存元信息');
       }
-      case 'list': {
-        if (!positional[1]) fail('缺少文件路径');
-        cmdList(positional[1], flags);
-        break;
-      }
-      case 'get': {
-        if (!positional[1] || positional[2] === undefined) fail('用法: get <文件> <uid>');
-        cmdGet(positional[1], positional[2]);
-        break;
-      }
-      case 'add': {
-        if (!positional[1]) fail('缺少文件路径');
-        cmdAdd(positional[1], flags);
-        break;
-      }
-      case 'update': {
-        if (!positional[1] || positional[2] === undefined) fail('用法: update <文件> <uid> --字段 值');
-        cmdUpdate(positional[1], positional[2], flags);
-        break;
-      }
-      case 'remove': {
-        if (!positional[1] || positional[2] === undefined) fail('用法: remove <文件> <uid>');
-        cmdRemove(positional[1], positional[2]);
-        break;
-      }
-      case 'batch': {
-        if (!positional[1] || !positional[2]) fail('用法: batch <文件> <uid,uid,...> --disable');
-        cmdBatch(positional[1], positional[2], flags);
-        break;
-      }
-      case 'search': {
-        if (!positional[1] || positional[2] === undefined) fail('用法: search <文件> <关键词>');
-        cmdSearch(positional[1], positional[2], flags);
-        break;
-      }
-      case 'validate': {
-        if (!positional[1]) fail('缺少文件路径');
-        cmdValidate(positional[1]);
-        break;
-      }
-      case 'import': {
-        if (!positional[1]) fail('缺少来源文件');
-        cmdImport(positional[1], typeof flags.out === 'string' ? flags.out : null);
-        break;
-      }
-      case 'export': {
-        if (!positional[1]) fail('缺少文件路径');
-        cmdExport(positional[1], flags.type, typeof flags.out === 'string' ? flags.out : null);
-        break;
-      }
-      case 'export-card': {
-        if (!positional[1] || !flags.image || !flags.out) fail('用法: export-card <文件> --image 底图.png --out 卡.png');
-        cmdExportCard(positional[1], flags.image, flags.out);
-        break;
-      }
-      case 'serve': {
-        cmdServe(flags);
-        break;
-      }
-      default:
-        fail('未知命令: ' + cmd + '（用 help 查看用法）');
+      showWorldbook(wb, file);
+      return;
     }
-  } catch (e) {
-    fail(e.message);
+
+    case 'entries': {
+      if (!positional[1]) fail('用法: wbedit entries <文件>');
+      const wb = core.load(positional[1]);
+      for (const e of Object.values(wb.entries)) {
+        showEntry(e);
+        console.log('');
+      }
+      return;
+    }
+
+    case 'get': {
+      if (!positional[2]) fail('用法: wbedit get <文件> <uid>');
+      const wb = core.load(positional[1]);
+      const e = wb.entries[String(positional[2])];
+      if (!e) fail('条目 #' + positional[2] + ' 不存在');
+      showEntry(e);
+      return;
+    }
+
+    case 'add': {
+      if (!positional[1]) fail('用法: wbedit add <文件> [--key …] [--comment …] …');
+      const wb = core.load(positional[1]);
+      const e = core.addEntry(wb, {
+        key: flags.key || '',
+        comment: flags.comment || '',
+        content: flags.content || '',
+        constant: flags.constant === true || flags.constant === 'true' || flags.constant === '1',
+        order: flags.order !== undefined ? Number(flags.order) : 100,
+        position: flags.position !== undefined ? Number(flags.position) : 0,
+        depth: flags.depth !== undefined ? Number(flags.depth) : 4,
+      });
+      core.save(positional[1], wb);
+      console.log('已新增 #' + e.uid);
+      showEntry(e);
+      return;
+    }
+
+    case 'update': {
+      if (!positional[2]) fail('用法: wbedit update <文件> <uid> <字段=值>…');
+      const file = positional[1];
+      const uid = positional[2];
+      const wb = core.load(file);
+      const fields = {};
+      for (const kv of positional.slice(3)) {
+        const i = kv.indexOf('=');
+        if (i < 0) fail('参数格式应为 字段=值: ' + kv);
+        const k = kv.slice(0, i).trim();
+        let v = kv.slice(i + 1).trim();
+        if (v === 'true') v = true;
+        else if (v === 'false') v = false;
+        else if (v === 'null') v = null;
+        else if (!isNaN(Number(v)) && v !== '') v = Number(v);
+        fields[k] = v;
+      }
+      const e = core.updateEntry(wb, uid, fields);
+      core.save(file, wb);
+      console.log('已更新 #' + uid);
+      showEntry(e);
+      return;
+    }
+
+    case 'remove': {
+      if (!positional[2]) fail('用法: wbedit remove <文件> <uid>…');
+      const file = positional[1];
+      const wb = core.load(file);
+      for (const uid of positional.slice(2)) core.removeEntry(wb, uid);
+      core.save(file, wb);
+      console.log('已删除: ' + positional.slice(2).join(', '));
+      return;
+    }
+
+    case 'batch': {
+      if (!positional[1]) fail('用法: wbedit batch <文件> --enable|--disable|--remove [--uid N …]');
+      const file = positional[1];
+      const uids = Array.isArray(flags.uid) ? flags.uid : (flags.uid !== undefined ? [flags.uid] : []);
+      if (uids.length === 0) fail('请用 --uid 指定至少一个条目');
+      const action = flags.enable ? 'enable' : flags.disable ? 'disable' : flags.remove ? 'remove' : null;
+      if (!action) fail('请指定 --enable / --disable / --remove');
+      const wb = core.load(file);
+      const r = core.batch(wb, uids, action);
+      core.save(file, wb);
+      console.log('成功: ' + r.ok.join(', ') + (r.missing.length ? ' 缺失: ' + r.missing.join(', ') : ''));
+      return;
+    }
+
+    case 'search': {
+      if (!positional[2]) fail('用法: wbedit search <文件> <关键词>');
+      const wb = core.load(positional[1]);
+      const list = core.search(wb, positional[2]);
+      console.log('命中 ' + list.length + ' 条:');
+      for (const e of list) { showEntry(e); console.log(''); }
+      return;
+    }
+
+    case 'validate': {
+      if (!positional[1]) fail('用法: wbedit validate <文件>');
+      const wb = core.load(positional[1]);
+      const r = validate(wb);
+      for (const w of r.warnings) console.log('⚠ ' + w.message);
+      for (const e of r.errors) console.log('✗ ' + e.message);
+      if (r.ok) console.log('校验通过: 结构完整，无错误');
+      else fail(r.errors.length + ' 个错误');
+      return;
+    }
+
+    case 'export': {
+      if (!positional[1]) fail('用法: wbedit export <文件> [--type classic|st3|png] [--out 路径]');
+      const wb = core.load(positional[1]);
+      const type = flags.type || 'classic';
+      let out = flags.out;
+      if (type === 'png') {
+        out = out || path.join(path.dirname(positional[1]), (wb.name || '世界书') + '.png');
+        const png = io.toPng(wb);
+        fs.writeFileSync(out, png);
+        console.log('已导出 PNG: ' + out);
+      } else {
+        const text = io.exportWorldbook(wb, type);
+        if (out) { fs.writeFileSync(out, text, 'utf8'); console.log('已导出: ' + out); }
+        else process.stdout.write(text);
+      }
+      return;
+    }
+
+    case 'import': {
+      if (!positional[1]) fail('用法: wbedit import <来源> [--out 路径]');
+      const r = io.importWorldbook(positional[1]);
+      if (flags.out) {
+        const out = path.resolve(flags.out);
+        fs.mkdirSync(path.dirname(out), { recursive: true });
+        core.save(out, r.wb);
+        console.log('已导入 ' + Object.keys(r.wb.entries).length + ' 条 → ' + out);
+      } else {
+        console.log('来源: ' + r.source + ' 格式: ' + r.format + ' 条目: ' + Object.keys(r.wb.entries).length);
+        console.log('使用 --out 指定保存路径');
+      }
+      return;
+    }
+
+    case 'web': {
+      const port = flags.port ? Number(flags.port) : 8099;
+      const noBrowser = flags['no-browser'] === true;
+      const server = require('../lib/server.js');
+      server.start(port, !noBrowser);
+      return;
+    }
+
+    default:
+      fail('未知命令: ' + cmd + '（wbedit help 查看用法）');
   }
 }
 
-main();
+main().catch(e => fail(e.message));
