@@ -97,7 +97,30 @@ ok('JSON 缩进 2 空格', raw.includes('\n  "'));
 const wbUnk = { name: 'x', entries: { '0': schema.normalizeEntry({ uid: 0, comment: 'A', content: 'A 内容包含主体名词 A', key: [], myCustomField: 'hello' }, 0) } };
 ok('未知字段保留', wbUnk.entries['0'].myCustomField === 'hello');
 
-// ---------- 6. ST3 互转 ----------
+// ---------- 6. 元信息（名称/描述） ----------
+section('元信息（名称/描述）');
+const metaWb = core.load(SAMPLE);
+core.updateMeta(metaWb, { name: '改名测试', description: '这是世界书描述' });
+ok('updateMeta 改名称', metaWb.name === '改名测试');
+ok('updateMeta 写描述', metaWb.description === '这是世界书描述');
+
+const metaFile = WORK + '/meta.json';
+fs.copyFileSync(SAMPLE, metaFile);
+const metaWb2 = core.load(metaFile);
+core.updateMeta(metaWb2, { name: '改名测试', description: '这是世界书描述' });
+core.save(metaFile, metaWb2);
+const metaBack = core.load(metaFile);
+ok('保存回读 name', metaBack.name === '改名测试');
+ok('保存回读 description', metaBack.description === '这是世界书描述');
+ok('保存后顶层字段含 description', 'description' in JSON.parse(fs.readFileSync(metaFile, 'utf8')));
+const metaCb = schema.toCharacterBook(metaBack);
+ok('ST3 导出映射 name/description', metaCb.name === '改名测试' && metaCb.description === '这是世界书描述');
+
+// 清空描述
+core.updateMeta(metaWb2, { description: '' });
+ok('updateMeta 清空描述', metaWb2.description === '');
+
+// ---------- 7. ST3 互转 ----------
 section('ST3 互转');
 const cb = schema.toCharacterBook(wbBig);
 ok('ST3 entries 是数组', Array.isArray(cb.entries) && cb.entries.length === 107);
@@ -115,7 +138,7 @@ ok('ST3 enabled=false -> disable=true 映射', cb.entries.filter(e => e.enabled 
 ok('回读条目含 content', typeof back0.content === 'string' && back0.content.length > 0);
 ok('回读条目 keys -> key 映射', Array.isArray(back0.key) && back0.key.length === cb.entries[0].keys.length);
 
-// ---------- 7. 导入导出 ----------
+// ---------- 8. 导入导出 ----------
 section('导入导出');
 // 导出 ST3 文件 -> 再导入
 const st3file = WORK + '/st3.json';
@@ -129,7 +152,7 @@ fs.writeFileSync(clfile, io.exportWorldbook(wbBig, 'classic'));
 let imp2 = io.importWorldbook(clfile);
 ok('经典文件导入', imp2.sourceType === 'classic' && Object.keys(imp2.wb.entries).length === 107);
 
-// ---------- 8. PNG 构建 + 提取（自洽闭环） ----------
+// ---------- 9. PNG 构建 + 提取（自洽闭环） ----------
 section('PNG 闭环');
 // 造一个最小合法 PNG（1x1 像素 + IHDR + IDAT + IEND），再插入 ccv3
 function makeBasePng() {
