@@ -523,7 +523,7 @@ $('btnValidate').onclick = async () => {
       for (const e of r.errors) panel.innerHTML += '<div class="v-error">❌ ' + esc(e.message) + '</div>';
       for (const w of r.warnings) panel.innerHTML += '<div class="v-warning">⚠ ' + esc(w.message) + '</div>';
     }
-    setStatus('校验完成: ' + (r.ok ? '通过' : r.errors.length + ' 错误'), r.ok ? '#9fe6b4' : '#ff9dab');
+    setStatus('校验完成: ' + (r.valid ? '通过' : r.errors.length + ' 错误'), r.valid ? '#9fe6b4' : '#ff9dab');
   } catch (e) { alert('校验失败: ' + e.message); }
 };
 
