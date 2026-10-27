@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>世界书编辑器</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: "Microsoft YaHei", "Segoe UI", sans-serif; background: #0f1420; color: #dde3ee; height: 100vh; display: flex; flex-direction: column; font-size: 13px; }
+header { padding: 8px 14px; background: #161d2e; border-bottom: 1px solid #2a3550; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+header h1 { font-size: 15px; color: #8fb7ff; margin-right: 10px; white-space: nowrap; }
+header input[type=text] { flex: 1; min-width: 220px; background: #0b101c; border: 1px solid #2a3550; color: #dde3ee; padding: 6px 10px; border-radius: 6px; font-size: 13px; }
+header input[type=text]:focus { outline: none; border-color: #4a7dff; }
+button { background: #223150; border: 1px solid #34486e; color: #cfd8ea; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 12px; }
+button:hover { background: #2b3d63; }
+button.primary { background: #2f5bd8; border-color: #3d6bf0; color: #fff; }
+button.danger { background: #58262c; border-color: #8c3944; color: #ffc9c9; }
+button.small { padding: 3px 8px; font-size: 11px; }
+button:disabled { opacity: .45; cursor: not-allowed; }
+main { flex: 1; display: flex; overflow: hidden; }
+#listPane { width: 360px; min-width: 260px; border-right: 1px solid #2a3550; display: flex; flex-direction: column; background: #121829; }
+#searchBox { margin: 10px 10px 0; background: #0b101c; border: 1px solid #2a3550; color: #dde3ee; padding: 7px 10px; border-radius: 6px; }
+.list-actions { display: flex; gap: 6px; padding: 8px 10px; flex-wrap: wrap; }
+#entryList { flex: 1; overflow-y: auto; padding: 0 6px 10px; }
+.entry-item { padding: 7px 9px; border: 1px solid #22304a; border-radius: 6px; margin: 5px 3px; cursor: pointer; background: #161d2e; display: flex; flex-direction: column; gap: 3px; }
+.entry-item:hover { border-color: #3d5a94; }
+.entry-item.active { border-color: #4a7dff; background: #1b2740; }
+.entry-item .row1 { display: flex; justify-content: space-between; align-items: center; gap: 6px; }
+.entry-item .uid { color: #7c8db5; font-family: Consolas, monospace; font-size: 11px; }
+.entry-item .comment { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #c9d4ec; }
+.entry-item .tags { display: flex; gap: 4px; }
+.entry-item .tag { font-size: 10px; padding: 1px 6px; border-radius: 8px; background: #243252; color: #9db8e8; }
+.entry-item .tag.const { background: #3b2f52; color: #c9a4f0; }
+.entry-item .tag.disabled { background: #3a2630; color: #e89db4; }
+.entry-item .keys { font-size: 10px; color: #6b7c9e; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.entry-item.selected { outline: 2px solid #4a7dff; }
+#detailPane { flex: 1; overflow-y: auto; padding: 16px 20px; background: #0f1420; }
+.detail-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; gap: 10px; flex-wrap: wrap; }
+.detail-head h2 { font-size: 15px; color: #8fb7ff; }
+.field { margin-bottom: 10px; }
+.field label { display: block; color: #8fa0c0; font-size: 11px; margin-bottom: 3px; }
+.field input[type=text], .field textarea, .field select { width: 100%; background: #0b101c; border: 1px solid #2a3550; color: #dde3ee; padding: 6px 9px; border-radius: 6px; font-size: 13px; font-family: inherit; }
+.field textarea { min-height: 80px; resize: vertical; line-height: 1.5; }
+.field textarea.content { min-height: 260px; font-family: Consolas, "Microsoft YaHei", monospace; }
+.field input[type=text]:focus, .field textarea:focus { outline: none; border-color: #4a7dff; }
+.field-row { display: flex; gap: 10px; }
+.field-row .field { flex: 1; }
+.checkbox-field { display: flex; align-items: center; gap: 6px; }
+.checkbox-field label { margin: 0; cursor: pointer; }
+.checkbox-field input { width: 15px; height: 15px; accent-color: #4a7dff; }
+.hint { color: #5f6f90; font-size: 11px; margin-top: 2px; }
+fieldset { border: 1px solid #2a3550; border-radius: 8px; padding: 10px 12px; margin: 14px 0; }
+fieldset legend { color: #8fa0c0; font-size: 12px; padding: 0 6px; }
+#emptyDetail { color: #5f6f90; text-align: center; margin-top: 80px; font-size: 14px; }
+#validatePanel { margin: 14px 0; }
+.v-error { color: #ff9dab; background: #2c1a20; border: 1px solid #6e2a38; padding: 6px 10px; border-radius: 6px; margin: 3px 0; font-size: 12px; }
+.v-warning { color: #ffd28a; background: #2c2416; border: 1px solid #6e552a; padding: 6px 10px; border-radius: 6px; margin: 3px 0; font-size: 12px; }
+.v-ok { color: #9fe6b4; background: #162c1d; border: 1px solid #2e6e42; padding: 6px 10px; border-radius: 6px; margin: 3px 0; font-size: 12px; }
+footer { padding: 6px 14px; background: #161d2e; border-top: 1px solid #2a3550; color: #7c8db5; font-size: 11px; display: flex; justify-content: space-between; }
+.modal { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: none; align-items: center; justify-content: center; z-index: 50; }
+.modal.show { display: flex; }
+.modal-box { background: #161d2e; border: 1px solid #2a3550; border-radius: 10px; padding: 20px; width: 460px; max-width: 92vw; }
+.modal-box.wide { width: 720px; }
+.modal-box h3 { color: #8fb7ff; margin-bottom: 12px; }
+.modal-box .field { margin-bottom: 10px; }
+.modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 14px; }
+.picker-bar { display: flex; gap: 6px; margin-bottom: 10px; align-items: center; }
+.picker-bar input[type=text] { flex: 1; background: #0b101c; border: 1px solid #2a3550; color: #dde3ee; padding: 6px 10px; border-radius: 6px; font-size: 13px; }
+.picker-nav { display: flex; gap: 4px; }
+.picker-list { border: 1px solid #2a3550; border-radius: 8px; min-height: 320px; max-height: 46vh; overflow-y: auto; background: #0f1420; }
+.picker-item { display: flex; align-items: center; gap: 8px; padding: 7px 10px; cursor: pointer; border-bottom: 1px solid #1c2740; font-size: 13px; }
+.picker-item:hover { background: #1b2740; }
+.picker-item.sel { background: #1e3a75; }
+.picker-item .ic { width: 20px; text-align: center; color: #6b7c9e; flex-shrink: 0; }
+.picker-item.dir .ic { color: #f0c674; }
+.picker-item .nm { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.picker-item .sz { color: #5f6f90; font-size: 11px; flex-shrink: 0; }
+.picker-item .tag { font-size: 10px; color: #7c8db5; border: 1px solid #2a3550; border-radius: 4px; padding: 0 5px; flex-shrink: 0; }
+.picker-item .tag.wb { color: #9fe6b4; border-color: #2e6e42; }
+.picker-empty { color: #5f6f90; text-align: center; padding: 30px 0; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>世界书编辑器</h1>
+  <input type="text" id="filePath" placeholder="世界书 JSON 文件路径（绝对路径或相对路径）" spellcheck="false">
+  <button id="btnBrowse" title="浏览文件">浏览…</button>
+  <button class="primary" id="btnOpen">打开</button>
+  <button id="btnNew">新建</button>
+  <button id="btnValidate">校验</button>
+  <button id="btnImport">导入</button>
+  <button id="btnExport">导出</button>
+</header>
+
+<main>
+  <div id="listPane">
+    <input type="text" id="searchBox" placeholder="搜索 comment / content / 触发词…" spellcheck="false">
+    <div class="list-actions">
+      <button class="small primary" id="btnAdd">＋ 新增条目</button>
+      <button class="small" id="btnBatchEnable">启用选中</button>
+      <button class="small" id="btnBatchDisable">禁用选中</button>
+      <button class="small danger" id="btnBatchRemove">删除选中</button>
+    </div>
+    <div id="entryList"></div>
+  </div>
+
+  <div id="detailPane">
+    <div id="emptyDetail">← 打开世界书文件开始编辑<br>或点击「新增条目」直接创建</div>
+    <div id="detailForm" style="display:none">
+      <div class="detail-head">
+        <h2 id="detailTitle">条目</h2>
+        <div style="display:flex;gap:6px">
+          <button class="primary small" id="btnSave">保存修改</button>
+          <button class="danger small" id="btnDelete">删除条目</button>
+        </div>
+      </div>
+
+      <div class="field-row">
+        <div class="field"><label>uid（只读）</label><input type="text" id="f_uid" readonly></div>
+        <div class="field" style="flex:2"><label>comment（注释 / 标题）</label><input type="text" id="f_comment" placeholder="如：种族设定、主角情报"></div>
+      </div>
+
+      <div class="field"><label>key（主触发词，逗号分隔；支持 /正则/i 形式）</label>
+        <input type="text" id="f_key" placeholder="精灵,elf,森之民" spellcheck="false"></div>
+      <div class="field"><label>keysecondary（次要触发词，逗号分隔）</label>
+        <input type="text" id="f_keysecondary" placeholder="可选" spellcheck="false"></div>
+
+      <div class="field"><label>content（正文 —— LLM 唯一能看见的部分！主体名词必须写在这里）</label>
+        <textarea class="content" id="f_content" placeholder="条目正文…"></textarea>
+        <div class="hint">铁律：LLM 只能看见 content，看不见 keys / comment / 标题。请确保主体名词出现在 content 中。</div>
+      </div>
+
+      <fieldset>
+        <legend>触发与注入</legend>
+        <div class="field-row">
+          <div class="field"><label>order（排序）</label><input type="text" id="f_order" value="100"></div>
+          <div class="field"><label>position（注入位置）</label>
+            <select id="f_position">
+              <option value="0">@ 系统提示开头</option>
+              <option value="1"># 对话区</option>
+              <option value="2">@# 提示词+对话</option>
+              <option value="3">#@ 对话+提示词</option>
+              <option value="4">末尾</option>
+              <option value="5">开头</option>
+            </select>
+          </div>
+          <div class="field"><label>depth（扫描深度）</label><input type="text" id="f_depth" value="4"></div>
+          <div class="field"><label>probability（触发概率%）</label><input type="text" id="f_probability" value="100"></div>
+        </div>
+        <div class="field-row">
+          <div class="field"><label>group（分组）</label><input type="text" id="f_group" placeholder="可选"></div>
+          <div class="field"><label>sticky（保持轮数）</label><input type="text" id="f_sticky" value="0"></div>
+          <div class="field"><label>role</label>
+            <select id="f_role"><option value="0">系统</option><option value="1">用户</option><option value="2">助手</option></select>
+          </div>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>开关</legend>
+        <div class="checkbox-field"><input type="checkbox" id="f_constant"><label for="f_constant">常驻（constant，始终注入）</label></div>
+        <div class="checkbox-field"><input type="checkbox" id="f_disable"><label for="f_disable">禁用（disable）</label></div>
+        <div class="checkbox-field"><input type="checkbox" id="f_selective"><label for="f_selective">选择性触发（selective）</label></div>
+        <div class="checkbox-field"><input type="checkbox" id="f_use_regex"><label for="f_use_regex">key 按正则解析（use_regex）</label></div>
+        <div class="checkbox-field"><input type="checkbox" id="f_caseSensitive"><label for="f_caseSensitive">大小写敏感</label></div>
+        <div class="checkbox-field"><input type="checkbox" id="f_matchWholeWords"><label for="f_matchWholeWords">整词匹配</label></div>
+        <div class="checkbox-field"><input type="checkbox" id="f_useProbability"><label for="f_useProbability">启用概率触发</label></div>
+      </fieldset>
+
+      <fieldset>
+        <legend>高级</legend>
+        <div class="field-row">
+          <div class="field"><label>selectiveLogic</label>
+            <select id="f_selectiveLogic"><option value="0">AND</option><option value="1">OR</option><option value="2">分叉</option></select></div>
+          <div class="field"><label>cooldown</label><input type="text" id="f_cooldown" value="0"></div>
+          <div class="field"><label>delay</label><input type="text" id="f_delay" value="0"></div>
+          <div class="field"><label>groupWeight</label><input type="text" id="f_groupWeight" value="100"></div>
+        </div>
+        <div class="checkbox-field"><input type="checkbox" id="f_excludeRecursion"><label for="f_excludeRecursion">排除递归</label></div>
+        <div class="checkbox-field"><input type="checkbox" id="f_preventRecursion"><label for="f_preventRecursion">禁止递归</label></div>
+        <div class="checkbox-field"><input type="checkbox" id="f_delayUntilRecursion"><label for="f_delayUntilRecursion">延迟至递归</label></div>
+        <div class="checkbox-field"><input type="checkbox" id="f_groupOverride"><label for="f_groupOverride">分组覆盖</label></div>
+        <div class="checkbox-field"><input type="checkbox" id="f_useGroupScoring"><label for="f_useGroupScoring">分组计分</label></div>
+        <div class="checkbox-field"><input type="checkbox" id="f_ignoreBudget"><label for="f_ignoreBudget">忽略预算</label></div>
+        <div class="field"><label>triggers（额外触发，逗号分隔）</label><input type="text" id="f_triggers" spellcheck="false"></div>
+      </fieldset>
+
+      <div id="validatePanel"></div>
+    </div>
+  </div>
+</main>
+
+<footer>
+  <span id="statusText">未打开文件</span>
+  <span>世界书编辑器 · V3 + DSH-Tavern 兼容</span>
+</footer>
+
+<!-- 新建/导入 弹窗 -->
+<div class="modal" id="modalNew">
+  <div class="modal-box">
+    <h3>新建世界书</h3>
+    <div class="field"><label>文件路径</label>
+      <div class="picker-bar"><input type="text" id="newFilePath" placeholder="绝对路径或相对路径"><button class="small" id="btnNewBrowse">浏览…</button></div>
+    </div>
+    <div class="field"><label>名称</label><input type="text" id="newFileName" placeholder="世界书名称"></div>
+    <div class="modal-actions">
+      <button id="btnNewCancel">取消</button>
+      <button class="primary" id="btnNewConfirm">创建</button>
+    </div>
+  </div>
+</div>
+<div class="modal" id="modalImport">
+  <div class="modal-box">
+    <h3>导入世界书</h3>
+    <p class="hint" style="margin-bottom:10px">支持：世界书 JSON（经典 / ST3）、角色卡 PNG（ccv3/chara）、角色卡 JSON。</p>
+    <div class="field"><label>来源文件</label>
+      <div class="picker-bar"><input type="text" id="importSrc" placeholder="例如：E:\cards\角色卡.png"><button class="small" id="btnImportBrowse">浏览…</button></div>
+    </div>
+    <div class="field"><label>保存到（留空自动保存到「导入\文件名.json」，同名自动加（1））</label><input type="text" id="importOut" placeholder="留空：导入\文件名.json"></div>
+    <div class="modal-actions">
+      <button id="btnImportCancel">取消</button>
+      <button class="primary" id="btnImportConfirm">导入</button>
+    </div>
+  </div>
+</div>
+
+<!-- 文件浏览弹窗 -->
+<div class="modal" id="modalPicker">
+  <div class="modal-box wide">
+    <h3>选择文件</h3>
+    <div class="picker-bar">
+      <input type="text" id="pickerPath" placeholder="目录路径，回车跳转" spellcheck="false">
+      <div class="picker-nav">
+        <button class="small" id="pickerUp" title="上级目录">上级</button>
+        <button class="small" id="pickerRoot" title="回到工作目录">工作目录</button>
+      </div>
+    </div>
+    <div class="picker-list" id="pickerList"></div>
+    <div class="modal-actions">
+      <span class="hint" style="margin-right:auto" id="pickerHint">单击目录进入 · 单击文件选中 · 双击文件直接选择</span>
+      <button id="pickerCancel">取消</button>
+      <button class="primary" id="pickerConfirm">选择</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ---------- 状态 ----------
+const S = {
+  file: null,        // 当前世界书路径
+  name: null,
+  entries: [],       // 当前列表
+  selectedUid: null, // 详情中编辑的 uid
+  selectedIds: new Set(), // 列表多选
+  searchQuery: '',
+};
+
+const $ = id => document.getElementById(id);
+
+// ---------- API ----------
+async function api(route, body) {
+  const res = await fetch('/api/' + route, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body || {}),
+  });
+  const data = await res.json();
+  if (!data.ok) throw new Error(data.error || '请求失败');
+  return data;
+}
+
+// ---------- 列表渲染 ----------
+function renderList() {
+  const listEl = $('entryList');
+  const q = S.searchQuery.toLowerCase();
+  let items = S.entries.filter(e => {
+    if (!q) return true;
+    return (e.comment || '').toLowerCase().includes(q) ||
+      (e.content || '').toLowerCase().includes(q) ||
+      (e.key || []).some(k => k.toLowerCase().includes(q)) ||
+      (e.group || '').toLowerCase().includes(q);
+  });
+  listEl.innerHTML = '';
+  if (items.length === 0) {
+    listEl.innerHTML = '<div class="hint" style="text-align:center;margin-top:30px">没有条目</div>';
+    return;
+  }
+  for (const e of items) {
+    const div = document.createElement('div');
+    div.className = 'entry-item' + (e.uid === S.selectedUid ? ' active' : '') + (S.selectedIds.has(e.uid) ? ' selected' : '');
+    div.innerHTML =
+      '<div class="row1"><span class="uid">#' + e.uid + '</span>' +
+      '<span class="comment" title="' + esc((e.comment || '') + (e.content ? '' : '')) + '">' + esc(e.comment || '(无注释)') + '</span>' +
+      '<span class="tags">' +
+      (e.constant ? '<span class="tag const">常驻</span>' : '') +
+      (e.disable ? '<span class="tag disabled">禁用</span>' : '') +
+      '</span></div>' +
+      '<div class="keys">⟦' + esc((e.key || []).join(', ') || '无触发词') + '⟧  ·  ' + (e.order || 0) + '/' + posName(e.position) + '</div>';
+    div.onclick = ev => {
+      if (ev.shiftKey) {
+        if (S.selectedIds.has(e.uid)) S.selectedIds.delete(e.uid); else S.selectedIds.add(e.uid);
+        renderList();
+        return;
+      }
+      selectEntry(e.uid);
+    };
+    listEl.appendChild(div);
+  }
+}
+
+function posName(p) { return ['@', '#', '@#', '#@', '末尾', '开头'][p] || p; }
+function esc(s) { return String(s).replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m])); }
+
+// ---------- 详情渲染 ----------
+function selectEntry(uid) {
+  S.selectedUid = uid;
+  const e = S.entries.find(x => x.uid === uid);
+  if (!e) return;
+  renderList();
+  $('emptyDetail').style.display = 'none';
+  $('detailForm').style.display = 'block';
+  $('detailTitle').textContent = '条目 #' + e.uid + ' — ' + (e.comment || '无注释');
+  $('f_uid').value = e.uid;
+  $('f_comment').value = e.comment || '';
+  $('f_key').value = (e.key || []).join(', ');
+  $('f_keysecondary').value = (e.keysecondary || []).join(', ');
+  $('f_content').value = e.content || '';
+  $('f_order').value = e.order ?? 100;
+  $('f_position').value = e.position ?? 0;
+  $('f_depth').value = e.depth ?? 4;
+  $('f_probability').value = e.probability ?? 100;
+  $('f_group').value = e.group || '';
+  $('f_sticky').value = e.sticky ?? 0;
+  $('f_role').value = e.role ?? 0;
+  $('f_constant').checked = !!e.constant;
+  $('f_disable').checked = !!e.disable;
+  $('f_selective').checked = !!e.selective;
+  $('f_use_regex').checked = !!e.use_regex;
+  $('f_caseSensitive').checked = !!e.caseSensitive;
+  $('f_matchWholeWords').checked = !!e.matchWholeWords;
+  $('f_useProbability').checked = e.useProbability !== false;
+  $('f_selectiveLogic').value = e.selectiveLogic ?? 0;
+  $('f_cooldown').value = e.cooldown ?? 0;
+  $('f_delay').value = e.delay ?? 0;
+  $('f_groupWeight').value = e.groupWeight ?? 100;
+  $('f_excludeRecursion').checked = !!e.excludeRecursion;
+  $('f_preventRecursion').checked = !!e.preventRecursion;
+  $('f_delayUntilRecursion').checked = !!e.delayUntilRecursion;
+  $('f_groupOverride').checked = !!e.groupOverride;
+  $('f_useGroupScoring').checked = !!e.useGroupScoring;
+  $('f_ignoreBudget').checked = !!e.ignoreBudget;
+  $('f_triggers').value = (e.triggers || []).join(', ');
+  $('validatePanel').innerHTML = '';
+}
+
+// 收集表单字段
+function collectFields() {
+  const bool = id => $(id).checked;
+  return {
+    comment: $('f_comment').value,
+    key: $('f_key').value,
+    keysecondary: $('f_keysecondary').value,
+    content: $('f_content').value,
+    order: $('f_order').value,
+    position: $('f_position').value,
+    depth: $('f_depth').value,
+    probability: $('f_probability').value,
+    group: $('f_group').value,
+    sticky: $('f_sticky').value,
+    role: $('f_role').value,
+    constant: bool('f_constant'),
+    disable: bool('f_disable'),
+    selective: bool('f_selective'),
+    use_regex: bool('f_use_regex'),
+    caseSensitive: bool('f_caseSensitive'),
+    matchWholeWords: bool('f_matchWholeWords'),
+    useProbability: bool('f_useProbability'),
+    selectiveLogic: $('f_selectiveLogic').value,
+    cooldown: $('f_cooldown').value,
+    delay: $('f_delay').value,
+    groupWeight: $('f_groupWeight').value,
+    excludeRecursion: bool('f_excludeRecursion'),
+    preventRecursion: bool('f_preventRecursion'),
+    delayUntilRecursion: bool('f_delayUntilRecursion'),
+    groupOverride: bool('f_groupOverride'),
+    useGroupScoring: bool('f_useGroupScoring'),
+    ignoreBudget: bool('f_ignoreBudget'),
+    triggers: $('f_triggers').value,
+  };
+}
+
+// ---------- 打开/保存 ----------
+async function openFile(filePath) {
+  S.file = filePath;
+  const r = await api('list', { file: filePath });
+  S.name = r.name;
+  S.entries = r.entries;
+  S.selectedUid = null;
+  S.selectedIds.clear();
+  $('filePath').value = filePath;
+  renderList();
+  $('emptyDetail').style.display = 'block';
+  $('detailForm').style.display = 'none';
+  $('statusText').textContent = '已打开: ' + filePath + '（' + r.count + ' 条）';
+}
+
+async function reload() {
+  if (!S.file) return;
+  const r = await api('list', { file: S.file });
+  S.name = r.name;
+  S.entries = r.entries;
+  renderList();
+  if (S.selectedUid !== null) selectEntry(S.selectedUid);
+  $('statusText').textContent = '已重新加载: ' + S.file;
+}
+
+function setStatus(msg, color) {
+  $('statusText').textContent = msg;
+  $('statusText').style.color = color || '';
+}
+
+// ---------- 事件绑定 ----------
+$('btnOpen').onclick = async () => {
+  const p = $('filePath').value.trim();
+  if (!p) return alert('请输入文件路径');
+  try { await openFile(p); } catch (e) { alert('打开失败: ' + e.message); }
+};
+$('filePath').onkeydown = ev => { if (ev.key === 'Enter') $('btnOpen').click(); };
+$('searchBox').oninput = ev => { S.searchQuery = ev.target.value; renderList(); };
+
+$('btnAdd').onclick = async () => {
+  if (!S.file) { alert('请先打开世界书'); return; }
+  try {
+    const r = await api('add', { file: S.file, fields: { comment: '新条目', content: '', order: 100, position: 0 } });
+    await reload();
+    selectEntry(r.uid);
+  } catch (e) { alert('新增失败: ' + e.message); }
+};
+
+$('btnSave').onclick = async () => {
+  if (S.selectedUid === null || !S.file) return;
+  try {
+    await api('update', { file: S.file, uid: S.selectedUid, fields: collectFields() });
+    await reload();
+    setStatus('已保存 #' + S.selectedUid, '#9fe6b4');
+  } catch (e) { alert('保存失败: ' + e.message); }
+};
+
+$('btnDelete').onclick = async () => {
+  if (S.selectedUid === null || !S.file) return;
+  if (!confirm('确定删除条目 #' + S.selectedUid + '？')) return;
+  try {
+    await api('remove', { file: S.file, uid: S.selectedUid });
+    S.selectedUid = null;
+    await reload();
+  } catch (e) { alert('删除失败: ' + e.message); }
+};
+
+function selIds() {
+  if (S.selectedIds.size > 0) return [...S.selectedIds];
+  if (S.selectedUid !== null) return [S.selectedUid];
+  return [];
+}
+$('btnBatchEnable').onclick = async () => { await batchOp('enable'); };
+$('btnBatchDisable').onclick = async () => { await batchOp('disable'); };
+$('btnBatchRemove').onclick = async () => {
+  const ids = selIds(); if (ids.length === 0) return alert('未选中条目（点击列表条目，Shift+点击多选）');
+  if (!confirm('确定删除选中的 ' + ids.length + ' 个条目？')) return;
+  await batchOp('remove');
+};
+async function batchOp(action) {
+  const ids = selIds(); if (ids.length === 0) return alert('未选中条目');
+  try {
+    await api('batch', { file: S.file, ids, action });
+    S.selectedIds.clear();
+    await reload();
+  } catch (e) { alert('批量操作失败: ' + e.message); }
+}
+
+$('btnValidate').onclick = async () => {
+  if (!S.file) return alert('请先打开世界书');
+  try {
+    const r = await api('validate', { file: S.file });
+    const panel = $('validatePanel');
+    panel.innerHTML = '';
+    if (r.ok && r.errors.length === 0 && r.warnings.length === 0) {
+      panel.innerHTML = '<div class="v-ok">✅ 校验通过：结构完整，无冲突，无 LLM 可见性问题</div>';
+    } else {
+      if (r.errors.length === 0) panel.innerHTML = '<div class="v-ok">✅ 无错误（' + r.warnings.length + ' 个警告）</div>';
+      for (const e of r.errors) panel.innerHTML += '<div class="v-error">❌ ' + esc(e.message) + '</div>';
+      for (const w of r.warnings) panel.innerHTML += '<div class="v-warning">⚠ ' + esc(w.message) + '</div>';
+    }
+    setStatus('校验完成: ' + (r.ok ? '通过' : r.errors.length + ' 错误'), r.ok ? '#9fe6b4' : '#ff9dab');
+  } catch (e) { alert('校验失败: ' + e.message); }
+};
+
+// 新建
+$('btnNew').onclick = () => { $('modalNew').classList.add('show'); };
+$('btnNewCancel').onclick = () => { $('modalNew').classList.remove('show'); };
+$('btnNewConfirm').onclick = async () => {
+  const p = $('newFilePath').value.trim();
+  if (!p) return alert('请输入文件路径');
+  try {
+    await api('create', { file: p, name: $('newFileName').value.trim() || '新世界书' });
+    $('modalNew').classList.remove('show');
+    await openFile(p);
+  } catch (e) { alert('创建失败: ' + e.message); }
+};
+
+// 导入
+$('btnImport').onclick = () => { $('modalImport').classList.add('show'); };
+$('btnImportCancel').onclick = () => { $('modalImport').classList.remove('show'); };
+// 选择来源后自动生成默认保存路径：导入\文件名.json（PNG 卡也导出为 JSON）
+function autoImportOut(srcPath) {
+  const base = srcPath.replace(/\\/g, '/').split('/').pop();
+  const name = base.replace(/\.(json|png)$/i, '');
+  $('importOut').value = '导入\\' + name + '.json';
+}
+function importOutName(srcPath) {
+  const base = srcPath.replace(/\\/g, '/').split('/').pop();
+  const name = base.replace(/\.(json|png)$/i, '');
+  return '导入\\' + name + '.json';
+}
+$('importSrc').onchange = () => { const v = $('importSrc').value.trim(); if (v) autoImportOut(v); };
+$('btnImportBrowse').onclick = () => pickerOpen(p => {
+  $('importSrc').value = p;
+  autoImportOut(p);
+}, 'import');
+$('btnImportConfirm').onclick = async () => {
+  const src = $('importSrc').value.trim();
+  if (!src) return alert('请输入来源文件路径');
+  try {
+    // 留空 → 自动保存到 导入\文件名.json（同名由服务端自动加（1））
+    const out = $('importOut').value.trim() || importOutName(src);
+    const r = await api('import', { src, out });
+    $('modalImport').classList.remove('show');
+    await openFile(r.saved); setStatus(r.note + ' → 已导入 ' + r.count + ' 条 → ' + r.saved);
+  } catch (e) { alert('导入失败: ' + e.message); }
+};
+
+// 导出
+$('btnExport').onclick = async () => {
+  if (!S.file) return alert('请先打开世界书');
+  try {
+    const res = await fetch('/api/export', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ file: S.file, type: 'classic' }) });
+    const blob = await res.blob();
+    const a = document.createElement('a');
+    const name = (S.name || '世界书') + '.json';
+    a.href = URL.createObjectURL(blob); a.download = name; a.click();
+    URL.revokeObjectURL(a.href);
+  } catch (e) { alert('导出失败: ' + e.message); }
+};
+
+// ---------- 文件选择器 ----------
+// 打开一个文件，支持 JSON/PNG；新建时只选目录（或输入新文件名）
+const P = {
+  open: false,
+  mode: 'open',        // 'open' | 'new' | 'import'
+  path: null,          // 当前浏览目录
+  selected: null,      // 选中文件 {name, ext} 或 null
+  workRoot: null,
+  cb: null,            // 确认回调(filePath)
+  extHint: null,       // 扩展名提示文字
+};
+
+function fmtSize(n) {
+  if (n == null) return '';
+  if (n < 1024) return n + ' B';
+  if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
+  return (n / 1024 / 1024).toFixed(1) + ' MB';
+}
+
+async function pickerLoad() {
+  try {
+    const r = await api('dir', { path: P.path });
+    P.path = r.path;
+    P.workRoot = r.root;
+    $('pickerPath').value = r.path;
+    const listEl = $('pickerList');
+    listEl.innerHTML = '';
+    let any = false;
+    for (const d of r.dirs) {
+      any = true;
+      const row = document.createElement('div');
+      row.className = 'picker-item dir';
+      row.innerHTML = '<span class="ic">📁</span><span class="nm">' + esc(d) + '</span><span class="tag">目录</span>';
+      row.onclick = () => { P.path = r.path + '\\' + d; pickerLoad(); };
+      listEl.appendChild(row);
+    }
+    for (const f of r.files) {
+      const wb = f.ext === '.json' || f.ext === '.png';
+      if (P.mode === 'new' && f.ext !== '') continue; // 新建时只看目录
+      any = true;
+      const row = document.createElement('div');
+      row.className = 'picker-item' + (P.selected && P.selected.name === f.name ? ' sel' : '');
+      row.innerHTML = '<span class="ic">' + (f.ext === '.png' ? '🖼' : '📄') + '</span><span class="nm">' + esc(f.name) + '</span>' +
+        '<span class="sz">' + fmtSize(f.size) + '</span>' +
+        (wb ? '<span class="tag wb">' + (f.ext === '.png' ? 'PNG 卡' : 'JSON') + '</span>' : '<span class="tag">' + (f.ext || '文件') + '</span>');
+      row.onclick = () => {
+        P.selected = { name: f.name, path: r.path + '\\' + f.name, ext: f.ext };
+        // 重新高亮
+        [...listEl.children].forEach(c => c.classList.remove('sel'));
+        row.classList.add('sel');
+      };
+      row.ondblclick = () => pickerConfirm();
+      listEl.appendChild(row);
+    }
+    if (!any) listEl.innerHTML = '<div class="picker-empty">（空目录）</div>';
+  } catch (e) {
+    $('pickerList').innerHTML = '<div class="picker-empty">' + esc(e.message) + '</div>';
+  }
+}
+
+function pickerOpen(cb, mode) {
+  P.cb = cb; P.mode = mode || 'open'; P.selected = null;
+  P.path = (P.workRoot || '');
+  $('pickerHint').textContent =
+    mode === 'new' ? '选择保存位置（单击目录进入），文件名在「新建世界书」中输入' :
+    (mode === 'import' ? '单击目录进入 · 单击文件选中（JSON / PNG）' : '单击目录进入 · 单击 JSON/PNG 选中 · 双击直接打开');
+  $('modalPicker').classList.add('show');
+  pickerLoad();
+}
+function pickerClose() { $('modalPicker').classList.remove('show'); }
+function pickerConfirm() {
+  if (P.mode === 'new') { P.cb(P.path); pickerClose(); return; } // 新建：当前目录作为路径前缀
+  if (!P.selected) return alert('请先选择一个文件');
+  P.cb(P.selected.path); pickerClose();
+}
+
+$('btnBrowse').onclick = () => pickerOpen(p => { $('filePath').value = p; openFile(p); }, 'open');
+$('btnNewBrowse').onclick = () => pickerOpen(p => { $('newFilePath').value = p; }, 'new');
+$('btnImportBrowse').onclick = () => pickerOpen(p => { $('importSrc').value = p; }, 'import');
+$('pickerCancel').onclick = pickerClose;
+$('pickerConfirm').onclick = pickerConfirm;
+$('pickerUp').onclick = async () => {
+  try {
+    const r = await api('dir', { path: P.path });
+    if (r.parent) { P.path = r.parent; pickerLoad(); }
+  } catch (e) { alert(e.message); }
+};
+$('pickerRoot').onclick = () => { P.path = P.workRoot || ''; pickerLoad(); };
+$('pickerPath').onkeydown = ev => { if (ev.key === 'Enter') { P.path = $('pickerPath').value.trim(); pickerLoad(); } };
+
+// 初始 ping
+fetch('/api/ping', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
+  .then(r => r.json()).then(d => { setStatus('就绪 · 工作目录: ' + d.cwd); P.workRoot = d.cwd; })
+  .catch(() => setStatus('服务异常'));
+</script>
+</body>
+</html>
