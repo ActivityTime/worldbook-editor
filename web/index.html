@@ -106,6 +106,17 @@ footer { padding: 6px 14px; background: #161d2e; border-top: 1px solid #2a3550; 
   </div>
 
   <div id="detailPane">
+    <div id="metaForm" style="display:none">
+      <div class="detail-head">
+        <h2>世界书信息</h2>
+        <button class="primary small" id="btnSaveMeta">保存名称/描述</button>
+      </div>
+      <div class="field"><label>名称（顶层 name）</label><input type="text" id="m_name" placeholder="世界书名称" spellcheck="false"></div>
+      <div class="field"><label>描述（顶层 description）</label>
+        <textarea id="m_description" placeholder="世界书说明…"></textarea>
+        <div class="hint">名称与描述保存于世界书文件顶层（name / description）。DSH 经典格式原本没有顶层 description，写入后 ST 与 DSHT 均宽容读取；导出 ST V3 或打包角色卡 PNG 时映射到 character_book。</div>
+      </div>
+    </div>
     <div id="emptyDetail">← 打开世界书文件开始编辑<br>或点击「新增条目」直接创建</div>
     <div id="detailForm" style="display:none">
       <div class="detail-head">
@@ -250,6 +261,7 @@ footer { padding: 6px 14px; background: #161d2e; border-top: 1px solid #2a3550; 
 const S = {
   file: null,        // 当前世界书路径
   name: null,
+  description: '',
   entries: [],       // 当前列表
   selectedUid: null, // 详情中编辑的 uid
   selectedIds: new Set(), // 列表多选
@@ -395,22 +407,33 @@ async function openFile(filePath) {
   S.file = filePath;
   const r = await api('list', { file: filePath });
   S.name = r.name;
+  S.description = r.description || '';
   S.entries = r.entries;
   S.selectedUid = null;
   S.selectedIds.clear();
   $('filePath').value = filePath;
   renderList();
+  renderMeta();
   $('emptyDetail').style.display = 'block';
   $('detailForm').style.display = 'none';
   $('statusText').textContent = '已打开: ' + filePath + '（' + r.count + ' 条）';
+}
+
+// 渲染世界书元信息面板（打开文件后常驻显示）
+function renderMeta() {
+  $('metaForm').style.display = 'block';
+  $('m_name').value = S.name || '';
+  $('m_description').value = S.description || '';
 }
 
 async function reload() {
   if (!S.file) return;
   const r = await api('list', { file: S.file });
   S.name = r.name;
+  S.description = r.description || '';
   S.entries = r.entries;
   renderList();
+  renderMeta();
   if (S.selectedUid !== null) selectEntry(S.selectedUid);
   $('statusText').textContent = '已重新加载: ' + S.file;
 }
@@ -428,6 +451,15 @@ $('btnOpen').onclick = async () => {
 };
 $('filePath').onkeydown = ev => { if (ev.key === 'Enter') $('btnOpen').click(); };
 $('searchBox').oninput = ev => { S.searchQuery = ev.target.value; renderList(); };
+
+$('btnSaveMeta').onclick = async () => {
+  if (!S.file) return alert('请先打开世界书');
+  try {
+    await api('meta', { file: S.file, name: $('m_name').value, description: $('m_description').value });
+    await reload();
+    setStatus('已保存世界书名称/描述', '#9fe6b4');
+  } catch (e) { alert('保存失败: ' + e.message); }
+};
 
 $('btnAdd').onclick = async () => {
   if (!S.file) { alert('请先打开世界书'); return; }
