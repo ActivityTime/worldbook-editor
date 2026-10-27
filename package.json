@@ -1,0 +1,23 @@
+{
+  "name": "worldbook-editor",
+  "version": "1.0.0",
+  "description": "世界书编辑器：CLI + Web 双模式。SillyTavern V3 + DSH-Tavern 兼容。结构化编辑防止 LLM 直接改 JSON 把结构写坏。",
+  "main": "bin/wbedit.js",
+  "bin": {
+    "wbedit": "bin/wbedit.js"
+  },
+  "scripts": {
+    "start": "node bin/wbedit.js serve --open",
+    "cli": "node bin/wbedit.js"
+  },
+  "engines": {
+    "node": ">=14"
+  },
+  "keywords": [
+    "sillytavern",
+    "dsh-tavern",
+    "worldbook",
+    "lorebook"
+  ],
+  "license": "MIT"
+}
