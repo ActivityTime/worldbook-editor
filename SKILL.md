@@ -36,6 +36,7 @@ node bin\wbedit.js help
 | `meta` | `meta <文件> [--name 名称] [--description 描述]` | 查看 / 修改世界书名称与描述（不传参数只查看） |
 | `search` | `search <文件> <关键词> [--exact]` | 搜索（匹配 comment/content/key/group） |
 | `validate` | `validate <文件>` | 校验：结构 / 触发词冲突 / LLM 可见性铁律（有错误时 exit code=1） |
+| `sort` | `sort <文件> [--by uid|order] [--renumber-order N] [--dry-run]` | 重排条目顺序（物理顺序 + 可选重编 order）；`--by order` 按 order 升序、`--renumber-order N` 把 order 重编为 N,2N,3N…、`--dry-run` 仅预览 |
 | `import` | `import <来源> [--out 目标.json]` | 导入世界书 JSON 或角色卡 PNG（ccv3/chara） |
 | `export` | `export <文件> [--type classic\|st3] [--out 目标]` | 导出（经典 / ST V3） |
 | `export-card` | `export-card <文件> --image 底图.png --out 卡.png` | 把世界书打包进角色卡 PNG（ccv3） |
@@ -50,6 +51,25 @@ node wbedit.js meta wb.json --name "我的世界书" --description "设定说明
 node wbedit.js import 角色卡.png --out wb.json
 node wbedit.js validate wb.json
 ```
+
+### 排序条目（sort）
+
+重排条目在文件中的物理顺序，并可选择性地把 `order` 字段重编为均匀的步进值。
+
+```bash
+# 按 order 升序重排物理顺序，并把 order 重编为 10,20,30…
+node wbedit.js sort wb.json --by order --renumber-order 10
+# 仅预览目标顺序，不写盘
+node wbedit.js sort wb.json --by order --renumber-order 10 --dry-run
+# 按 uid 数值升序重排（不改动 order 值）
+node wbedit.js sort wb.json --by uid
+```
+
+- `--by uid`（默认）：按 uid 数值升序。
+- `--by order`：按 `order` 字段升序；未设 `order` 的条目视为 0（排最前）。
+- `--renumber-order N`：重排后把 `order` 重编为 `N, 2N, 3N…`；省略则不改动原 `order`。
+- `--dry-run`：只打印目标顺序与计划，不写文件。
+- 注：JS 对整型键（如 `"1"`/`"12"`）在 `JSON.stringify` 时会强制按数值升序，工具保存时按 `order` 字段手工拼出条目物理顺序，确保写盘顺序与意图一致。
 
 ## Web 模式
 
