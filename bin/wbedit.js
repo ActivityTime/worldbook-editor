@@ -33,6 +33,8 @@ function help() {
                                      批量启用/禁用/删除（--uid 可多次）
   search <文件> <关键词>             搜索条目（匹配 comment/content/key）
   validate <文件>                    校验世界书（结构/重复 key/LLM 可见性）
+  sort <文件> [--by uid|order] [--renumber-order N] [--dry-run]
+                                     重排条目顺序（物理顺序 + 可选重编 order）
   export <文件> [--type classic|st3|png] [--out 路径]
                                      导出（classic=原样 / st3=character_book / png=角色卡PNG）
   import <来源> [--out 路径]         导入世界书（JSON 或角色卡 PNG/JSON；--out 缺省 导入/<文件名>.json）
@@ -228,6 +230,35 @@ async function main() {
       for (const e of r.errors) console.log('✗ ' + e.message);
       if (r.ok) console.log('校验通过: 结构完整，无错误');
       else fail(r.errors.length + ' 个错误');
+      return;
+    }
+
+
+
+    case 'sort': {
+      if (!positional[1]) fail('用法: wbedit sort <文件> [--by uid|order] [--renumber-order N] [--dry-run]');
+      const file = positional[1];
+      const wb = core.load(file);
+      const by = flags.by === 'order' ? 'order' : 'uid';
+      let renumberOrder;
+      if (flags['renumber-order'] === undefined) renumberOrder = undefined;
+      else if (flags['renumber-order'] === true) renumberOrder = 10;
+      else {
+        const n = Number(flags['renumber-order']);
+        if (!Number.isFinite(n) || n <= 0) fail('--renumber-order 必须是正数');
+        renumberOrder = n;
+      }
+      const dryRun = !!flags['dry-run'];
+      const r = core.sortEntries(wb, { by, renumberOrder, dryRun });
+      if (dryRun) {
+        console.log('[dry-run] 目标顺序（按 ' + by + (renumberOrder ? '，order 步进 ' + renumberOrder : '') + '）：');
+        for (const p of r.plan) console.log('  #' + p.uid + '\torder=' + p.order);
+        console.log('未写入文件（dry-run）');
+        return;
+      }
+      core.save(file, wb);
+      console.log('已排序：按 ' + by + (renumberOrder ? ' 并重编 order（步进 ' + renumberOrder + '）' : '') + '，共 ' + r.ids.length + ' 条');
+      console.log('新顺序：' + r.plan.map(p => '#' + p.uid).join(' → '));
       return;
     }
 
