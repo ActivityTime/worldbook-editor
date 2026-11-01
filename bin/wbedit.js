@@ -38,7 +38,7 @@ function help() {
   export <文件> [--type classic|st3|png] [--out 路径]
                                      导出（classic=原样 / st3=character_book / png=角色卡PNG）
   import <来源> [--out 路径]         导入世界书（JSON 或角色卡 PNG/JSON；--out 缺省 导入/<文件名>.json）
-  web [--port 8099] [--no-browser]   启动 Web 界面
+  serve [--port 8080] [--open|--no-browser]   启动 Web 编辑界面（别名 web）
   help                                显示本帮助
 
 示例:
@@ -295,11 +295,13 @@ async function main() {
       return;
     }
 
+    case 'serve':
     case 'web': {
-      const port = flags.port ? Number(flags.port) : 8099;
-      const noBrowser = flags['no-browser'] === true;
+      const port = flags.port ? Number(flags.port) : 8080;
+      // serve 兼容旧启动脚本/文档（--open 打开浏览器，--no-browser 不打开；默认打开）
+      const openBrowser = !flags['no-browser'];
       const server = require('../lib/server.js');
-      server.start(port, !noBrowser);
+      server.start(port, openBrowser);
       return;
     }
 
