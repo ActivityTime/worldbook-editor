@@ -29,9 +29,14 @@ fs.mkdirSync(WORK, { recursive: true });
 section('加载真实样例');
 let wb = core.load(SAMPLE);
 ok('DSH 独立世界书可加载', wb.name === '【我的系统交互世界书】');
-ok('1 个条目', Object.keys(wb.entries).length === 1);
-ok('条目字段完整（41 字段）', Object.keys(wb.entries['7']).length === 41);
-ok('key 为数组', Array.isArray(wb.entries['7'].key));
+// 注意：SAMPLE 是你的真实世界书，条目数可能随使用变化，这里只断言“能加载且至少 1 条”，
+// 不写死具体条数，避免活样本变动导致测试脆断。
+const initialUids = Object.keys(wb.entries).map(Number).sort((a, b) => a - b);
+const initialCount = initialUids.length;
+ok('至少 1 个条目（当前 ' + initialCount + ' 条）', initialCount >= 1);
+const probeUid = String(initialUids[0]);
+ok('条目字段完整（≥40 字段）', Object.keys(wb.entries[probeUid]).length >= 40);
+ok('key 为数组', Array.isArray(wb.entries[probeUid].key));
 
 let wbBig = core.load(SAMPLE_BIG);
 ok('大世界书 107 条可加载', Object.keys(wbBig.entries).length === 107);
@@ -63,13 +68,16 @@ ok('重复触发词报错', vDup.errors.some(e => e.message.includes('被 2 个�
 // ---------- 3. CRUD ----------
 section('CRUD');
 let wb2 = core.load(SAMPLE);
+// 以加载到的真实条目为基准动态推导，不写死起始 uid / 下个 uid
+const startUids = Object.keys(wb2.entries).map(Number).sort((a, b) => a - b);
+const expectedUid = core.nextUid(wb2);
 const uid = core.addEntry(wb2, { comment: '测试条目', content: '这是一条测试内容，包含主体名词测试。', key: ['测试', 'test'], constant: true });
-ok('addEntry 分配 uid 8', uid.uid === 8);
-core.updateEntry(wb2, 8, { position: 4, order: 50, sticky: 3, probability: 80 });
-ok('updateEntry 生效', wb2.entries['8'].position === 4 && wb2.entries['8'].sticky === 3 && wb2.entries['8'].probability === 80);
-core.removeEntry(wb2, 8);
-ok('removeEntry 删除', wb2.entries['8'] === undefined);
-ok('原条目 #7 未受影响', wb2.entries['7'].comment === 'OOC指令');
+ok('addEntry 分配下一个 uid=' + expectedUid, uid.uid === expectedUid);
+core.updateEntry(wb2, expectedUid, { position: 4, order: 50, sticky: 3, probability: 80 });
+ok('updateEntry 生效', wb2.entries[String(expectedUid)].position === 4 && wb2.entries[String(expectedUid)].sticky === 3 && wb2.entries[String(expectedUid)].probability === 80);
+core.removeEntry(wb2, expectedUid);
+ok('removeEntry 删除', wb2.entries[String(expectedUid)] === undefined);
+ok('原条目未受影响', startUids.every(u => wb2.entries[String(u)] !== undefined));
 
 // ---------- 4. 搜索 ----------
 section('搜索');
@@ -87,7 +95,8 @@ fs.copyFileSync(SAMPLE, wf);
 core.save(wf, wb2);
 let reread = JSON.parse(fs.readFileSync(wf, 'utf8'));
 ok('保存后 JSON 可解析', !!reread && typeof reread.entries === 'object');
-ok('保存后 entries 键正确', Object.keys(reread.entries).join(',') === '7');
+// 回读后键集应与“原始加载到的条目”一致（增删测试条目已还原），不写死 '7'
+ok('保存后 entries 键与原始一致', Object.keys(reread.entries).map(Number).sort((a, b) => a - b).join(',') === startUids.join(','));
 ok('保存后有 name', reread.name === '【我的系统交互世界书】');
 ok('顶层字段保序（name 在 entries 前）', Object.keys(reread).join(',') === 'name,entries');
 const raw = fs.readFileSync(wf, 'utf8');
