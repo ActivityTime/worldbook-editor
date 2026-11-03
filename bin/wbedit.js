@@ -35,6 +35,8 @@ function help() {
   validate <文件>                    校验世界书（结构/重复 key/LLM 可见性）
   sort <文件> [--by uid|order] [--renumber-order N] [--dry-run]
                                      重排条目顺序（物理顺序 + 可选重编 order）
+  renumber-uid <文件> [--start N] [--by order|uid] [--renumber-order M] [--dry-run]
+                                     把条目 uid 重编为连续 N,N+1,…（可选同步重编 order）
   export <文件> [--type classic|st3|png] [--out 路径]
                                      导出（classic=原样 / st3=character_book / png=角色卡PNG）
   import <来源> [--out 路径]         导入世界书（JSON 或角色卡 PNG/JSON；--out 缺省 导入/<文件名>.json）
@@ -259,6 +261,39 @@ async function main() {
       core.save(file, wb);
       console.log('已排序：按 ' + by + (renumberOrder ? ' 并重编 order（步进 ' + renumberOrder + '）' : '') + '，共 ' + r.ids.length + ' 条');
       console.log('新顺序：' + r.plan.map(p => '#' + p.uid).join(' → '));
+      return;
+    }
+
+    case 'renumber-uid': {
+      if (!positional[1]) fail('用法: wbedit renumber-uid <文件> [--start N] [--by order|uid] [--renumber-order M] [--dry-run]');
+      const file = positional[1];
+      const wb = core.load(file);
+      let start = 0;
+      if (flags.start !== undefined) {
+        const n = Number(flags.start);
+        if (!Number.isFinite(n) || n < 0) fail('--start 必须是非负整数');
+        start = n;
+      }
+      let renumberOrder;
+      if (flags['renumber-order'] === undefined) renumberOrder = undefined;
+      else if (flags['renumber-order'] === true) renumberOrder = 10;
+      else {
+        const n = Number(flags['renumber-order']);
+        if (!Number.isFinite(n) || n <= 0) fail('--renumber-order 必须是正数');
+        renumberOrder = n;
+      }
+      const dryRun = !!flags['dry-run'];
+      const by = flags.by === 'uid' ? 'uid' : 'order';
+      const r = core.renumberUids(wb, { start, by, renumberOrder, dryRun });
+      if (dryRun) {
+        console.log('[dry-run] 重编 uid 计划（按 ' + by + '，起始 uid=' + start + (renumberOrder ? '，order 步进 ' + renumberOrder : '') + '）：');
+        for (const p of r.plan) console.log('  uid ' + p.from + ' → ' + p.to + '\torder=' + p.order + '\t' + (p.comment || '').slice(0, 20));
+        console.log('未写入文件（dry-run）');
+        return;
+      }
+      core.save(file, wb);
+      console.log('已重编 ' + r.count + ' 条 uid（按 ' + by + '，起始 uid=' + start + (renumberOrder ? '，order 步进 ' + renumberOrder : '') + '）');
+      for (const p of r.plan) console.log('  uid ' + p.from + ' → ' + p.to + '\torder=' + p.order + '\t' + (p.comment || '').slice(0, 20));
       return;
     }
 

@@ -88,6 +88,34 @@ ok('findByKey 精确匹配', byKey.length >= 1, '命中 ' + byKey.length);
 let empty = core.search(wbBig, '__不存在的词_xyz__');
 ok('无命中返回空', empty.length === 0);
 
+// ---------- 4.5. uid 重排 ----------
+section('uid 重排');
+// 带空洞的世界书：uid 0/4/9，order 30/10/20（order 不连续也不与 uid 对齐）
+const gapWb = { name: 'gap', entries: {
+  '0': schema.normalizeEntry({ uid: 0, comment: 'A', content: 'A 内容含主体名词 A', key: ['A'], order: 30 }, 0),
+  '4': schema.normalizeEntry({ uid: 4, comment: 'B', content: 'B 内容含主体名词 B', key: ['B'], order: 10 }, 4),
+  '9': schema.normalizeEntry({ uid: 9, comment: 'C', content: 'C 内容含主体名词 C', key: ['C'], order: 20 }, 9),
+} };
+const gapKeys = ['0', '4', '9'];
+const plan1 = core.renumberUids(gapWb, { dryRun: true });
+ok('dry-run 不改 entries', Object.keys(gapWb.entries).sort().join(',') === '0,4,9');
+ok('dry-run 计划按 order：4→0, 9→1, 0→2', plan1.plan.map(p => p.from).join(',') === '4,9,0', plan1.plan.map(p => p.from));
+// 实际重编：默认按 order，新 uid 连续 0,1,2；B(order10)→0、C(order20)→1、A(order30)→2
+const ren1 = core.renumberUids(gapWb, {});
+ok('重编后 uid 连续无空洞', Object.keys(gapWb.entries).map(Number).sort((a, b) => a - b).join(',') === '0,1,2');
+ok('order 最小者得最小新 uid（B→0）', gapWb.entries['0'].comment === 'B', gapWb.entries['0'].comment);
+ok('order 最大者得最大新 uid（A→2）', gapWb.entries['2'].comment === 'A');
+ok('条目字段保留（content/key）', gapWb.entries['1'].content === 'C 内容含主体名词 C' && gapWb.entries['2'].key[0] === 'A');
+// 仅连续化（by=uid）：保持原 uid 数字顺序 0,4,9 → 0,1,2，B 仍是原 uid4
+const renUid = core.renumberUids(gapWb, { by: 'uid', start: 0 });
+ok('by=uid 保序连续化（原4仍最前→0）', Object.keys(gapWb.entries).length === 3 && gapWb.entries['0'].comment === 'B');
+// renumberOrder 同步重编
+const ren2 = core.renumberUids(gapWb, { renumberOrder: 10 });
+ok('renumberOrder 重编 order 为 10,20,30', gapWb.entries['0'].order === 10 && gapWb.entries['1'].order === 20 && gapWb.entries['2'].order === 30);
+// 自定义 start
+const ren3 = core.renumberUids(gapWb, { start: 5 });
+ok('start=5 起始 uid', Object.keys(gapWb.entries).map(Number).sort((a, b) => a - b).join(',') === '5,6,7');
+
 // ---------- 5. 保存与回读（原子写、格式保持） ----------
 section('保存回读');
 const wf = WORK + '/saved.json';

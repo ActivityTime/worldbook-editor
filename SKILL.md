@@ -37,6 +37,7 @@ node bin\wbedit.js help
 | `search` | `search <文件> <关键词> [--exact]` | 搜索（匹配 comment/content/key/group） |
 | `validate` | `validate <文件>` | 校验：结构 / 触发词冲突 / LLM 可见性铁律（有错误时 exit code=1） |
 | `sort` | `sort <文件> [--by uid|order] [--renumber-order N] [--dry-run]` | 重排条目顺序（物理顺序 + 可选重编 order）；`--by order` 按 order 升序、`--renumber-order N` 把 order 重编为 N,2N,3N…、`--dry-run` 仅预览 |
+| `renumber-uid` | `renumber-uid <文件> [--start N] [--by order|uid] [--renumber-order M] [--dry-run]` | 把条目 uid 重编为连续 N,N+1,…（默认按 order 升序，可选同步把 order 重编为 M,2M,3M…）；`--dry-run` 仅预览映射 |
 | `import` | `import <来源> [--out 目标.json]` | 导入世界书 JSON 或角色卡 PNG（ccv3/chara） |
 | `export` | `export <文件> [--type classic\|st3] [--out 目标]` | 导出（经典 / ST V3） |
 | `export-card` | `export-card <文件> --image 底图.png --out 卡.png` | 把世界书打包进角色卡 PNG（ccv3） |
@@ -71,6 +72,27 @@ node wbedit.js sort wb.json --by uid
 - `--dry-run`：只打印目标顺序与计划，不写文件。
 - 注：JS 对整型键（如 `"1"`/`"12"`）在 `JSON.stringify` 时会强制按数值升序，工具保存时按 `order` 字段手工拼出条目物理顺序，确保写盘顺序与意图一致。
 
+### 重编条目 uid（renumber-uid）
+
+uid 是持久标识（新增时取当前最大 uid+1，只增不减、删条不退号），所以会空洞、不反映顺序。`renumber-uid` 把 uid 重编为连续值，让 uid 与顺序一致。
+
+```bash
+# 按 order 升序把 uid 重编为 0,1,2…（默认），并同步把 order 重编为 10,20,30…
+node wbedit.js renumber-uid wb.json --renumber-order 10
+# 仅预览旧uid→新uid 映射，不写盘
+node wbedit.js renumber-uid wb.json --dry-run
+# 按当前 uid 数值升序仅连续化（保序不重排），起始 uid=1
+node wbedit.js renumber-uid wb.json --by uid --start 1
+```
+
+- `--by order`（默认）：按 order 升序（同 order 按 uid）分配新 uid，uid 数字顺序与显示顺序一致。
+- `--by uid`：按当前 uid 升序分配新 uid，只把编号连续化、不改顺序。
+- `--start N`：起始 uid（默认 0，非负）。
+- `--renumber-order M`：同时把 order 重编为 M, 2M, 3M…，保证 uid 与 order 顺序完全对齐。
+- `--dry-run`：只打印映射计划，不写文件。
+
+> 已添加命令对应的 Web API：`POST /api/renumber-uid`（body: `{file, start?, by?, renumberOrder?, dryRun?}`）。
+
 ## Web 模式
 
 `node bin\wbedit.js serve --open` 后访问 `http://127.0.0.1:8080/`。
@@ -95,13 +117,14 @@ node wbedit.js sort wb.json --by uid
 1. **所有写操作必须走本工具**（CLI / Web API），禁止直接 `JSON.parse` + 改字段 + `writeFile` 裸覆盖
 2. 修改条目用 `update` 传字段名；布尔字段传 `true/false`；数组字段（key/keysecondary/triggers）用逗号分隔
 3. `validate` 通过后再交付；校验输出区分 `[错误]`（致命）与 `[警告]`
-4. 每次改完运行 `node test\test-all.js`（48 断言）做回归
+4. 每次改完运行 `node test\test-all.js`（57 断言）做回归
+5. **自动备份**：每次写操作（CLI 与 Web 的 `add`/`update`/`remove`/`batch`/`meta`/`sort`/`renumber-uid`/`import` 等）在写入前，都会自动把**改前的旧文件内容**快照到源文件同目录的 `backups/` 子目录（命名 `<原名>_备份_<YYYYMMDD_HHMMSS>.json`），供误改/误删后恢复。设环境变量 `WBEDIT_NO_BACKUP=1` 可关闭。**无实际变化的写入不会产生备份**（避免堆积）。
 
 ## 校验
 
 ```bash
 node test\test-all.js
-# 期望输出：48 通过, 0 失败
+# 期望输出：57 通过, 0 失败
 ```
 
 覆盖：真实样例加载 / 校验铁律 / CRUD / 搜索 / 原子保存回读 / 元信息（名称/描述改存回读与 ST3 映射）/ ST3 互转 / 导入导出 / PNG 构建提取闭环 / 损坏 JSON 友好提示。
