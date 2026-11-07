@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>角色卡编辑器 · 世界书编辑器</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: "Microsoft YaHei", "Segoe UI", sans-serif; background: #0f1420; color: #dde3ee; height: 100vh; display: flex; flex-direction: column; font-size: 13px; }
+header { padding: 8px 14px; background: #161d2e; border-bottom: 1px solid #2a3550; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+header h1 { font-size: 15px; color: #8fb7ff; margin-right: 4px; white-space: nowrap; }
+header a { color: #9db8e8; font-size: 12px; text-decoration: none; padding: 5px 9px; border: 1px solid #34486e; border-radius: 6px; white-space: nowrap; }
+header a:hover { background: #223150; }
+header input[type=text] { flex: 1; min-width: 200px; background: #0b101c; border: 1px solid #2a3550; color: #dde3ee; padding: 6px 10px; border-radius: 6px; font-size: 13px; }
+header input[type=text]:focus { outline: none; border-color: #4a7dff; }
+button { background: #223150; border: 1px solid #34486e; color: #cfd8ea; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 12px; }
+button:hover { background: #2b3d63; }
+button.primary { background: #2f5bd8; border-color: #3d6bf0; color: #fff; }
+button.danger { background: #58262c; border-color: #8c3944; color: #ffc9c9; }
+button.small { padding: 3px 8px; font-size: 11px; }
+button:disabled { opacity: .45; cursor: not-allowed; }
+.tabs { display: flex; gap: 2px; padding: 0 14px; background: #121829; border-bottom: 1px solid #2a3550; }
+.tabs button { border: none; border-radius: 0; background: transparent; padding: 9px 18px; color: #8fa0c0; border-bottom: 2px solid transparent; }
+.tabs button.active { color: #8fb7ff; border-bottom-color: #4a7dff; background: #161d2e; }
+main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+.panel { flex: 1; overflow: hidden; display: none; }
+.panel.active { display: flex; }
+#fieldsPane { overflow-y: auto; padding: 16px 20px; background: #0f1420; display: none; flex-direction: column; }
+#fieldsPane.active { display: flex; }
+.field { margin-bottom: 12px; }
+.field label { display: block; color: #8fa0c0; font-size: 11px; margin-bottom: 4px; }
+.field input[type=text], .field textarea, .field select { width: 100%; background: #0b101c; border: 1px solid #2a3550; color: #dde3ee; padding: 7px 10px; border-radius: 6px; font-size: 13px; font-family: inherit; }
+.field textarea { min-height: 64px; resize: vertical; line-height: 1.55; }
+.field textarea.big { min-height: 150px; font-family: Consolas, "Microsoft YaHei", monospace; }
+.field input[type=text]:focus, .field textarea:focus, .field select:focus { outline: none; border-color: #4a7dff; }
+.field-row { display: flex; gap: 12px; }
+.field-row .field { flex: 1; }
+.hint { color: #5f6f90; font-size: 11px; margin-top: 3px; line-height: 1.5; }
+fieldset { border: 1px solid #2a3550; border-radius: 8px; padding: 12px 14px; margin: 6px 0 18px; }
+fieldset legend { color: #8fb7ff; font-size: 12px; padding: 0 6px; }
+.list-editor-item { position: relative; margin-bottom: 8px; }
+.list-editor-item .idx { font-size: 11px; color: #7c8db5; margin-bottom: 3px; display: flex; justify-content: space-between; align-items: center; }
+.list-editor-item textarea { width: 100%; min-height: 110px; background: #0b101c; border: 1px solid #2a3550; color: #dde3ee; padding: 7px 10px; border-radius: 6px; font-size: 13px; font-family: inherit; line-height: 1.55; resize: vertical; }
+#listPane { width: 370px; min-width: 270px; border-right: 1px solid #2a3550; display: flex; flex-direction: column; background: #121829; }
+#searchBox { margin: 10px 10px 0; background: #0b101c; border: 1px solid #2a3550; color: #dde3ee; padding: 7px 10px; border-radius: 6px; }
+.list-actions { display: flex; gap: 6px; padding: 8px 10px; flex-wrap: wrap; }
+#entryList { flex: 1; overflow-y: auto; padding: 0 6px 10px; }
+.entry-item { padding: 7px 9px; border: 1px solid #22304a; border-radius: 6px; margin: 5px 3px; cursor: pointer; background: #161d2e; display: flex; flex-direction: column; gap: 3px; }
+.entry-item:hover { border-color: #3d5a94; }
+.entry-item.active { border-color: #4a7dff; background: #1b2740; }
+.entry-item.selected { outline: 2px solid #4a7dff; }
+.entry-item .row1 { display: flex; justify-content: space-between; align-items: center; gap: 6px; }
+.entry-item .uid { color: #7c8db5; font-family: Consolas, monospace; font-size: 11px; }
+.entry-item .comment { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #c9d4ec; }
+.entry-item .tag { font-size: 10px; padding: 1px 6px; border-radius: 8px; background: #243252; color: #9db8e8; }
+.entry-item .tag.const { background: #3b2f52; color: #c9a4f0; }
+.entry-item .tag.disabled { background: #3a2630; color: #e89db4; }
+.entry-item .keys { font-size: 10px; color: #6b7c9e; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#detailPane { flex: 1; overflow-y: auto; padding: 16px 20px; background: #0f1420; }
+.detail-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; gap: 10px; flex-wrap: wrap; }
+.detail-head h2 { font-size: 15px; color: #8fb7ff; }
+.checkbox-field { display: flex; align-items: center; gap: 6px; }
+.checkbox-field label { margin: 0; cursor: pointer; }
+.checkbox-field input { width: 15px; height: 15px; accent-color: #4a7dff; }
+.checkrow { display: flex; gap: 18px; flex-wrap: wrap; margin: 4px 0 12px; }
+#emptyDetail { color: #5f6f90; text-align: center; margin-top: 90px; font-size: 14px; line-height: 1.8; }
+footer { padding: 6px 14px; background: #161d2e; border-top: 1px solid #2a3550; color: #7c8db5; font-size: 11px; display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+#status { color: #9fe6b4; }
+#status.bad { color: #ff9dab; }
+.modal { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: none; align-items: center; justify-content: center; z-index: 50; }
+.modal.show { display: flex; }
+.modal-box { background: #161d2e; border: 1px solid #2a3550; border-radius: 10px; padding: 20px; width: 720px; max-width: 92vw; }
+.modal-box h3 { color: #8fb7ff; margin-bottom: 12px; }
+.picker-bar { display: flex; gap: 6px; margin-bottom: 10px; align-items: center; }
+.picker-bar input[type=text] { flex: 1; background: #0b101c; border: 1px solid #2a3550; color: #dde3ee; padding: 6px 10px; border-radius: 6px; font-size: 13px; }
+.picker-list { border: 1px solid #2a3550; border-radius: 8px; min-height: 300px; max-height: 50vh; overflow-y: auto; background: #0f1420; }
+.picker-item { display: flex; align-items: center; gap: 8px; padding: 7px 10px; cursor: pointer; border-bottom: 1px solid #1c2740; font-size: 13px; }
+.picker-item:hover { background: #1b2740; }
+.picker-item .ic { width: 20px; text-align: center; color: #6b7c9e; flex-shrink: 0; }
+.picker-item.dir .ic { color: #f0c674; }
+.picker-item .nm { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.picker-item .sz { color: #5f6f90; font-size: 11px; flex-shrink: 0; }
+.picker-empty { color: #5f6f90; text-align: center; padding: 30px 0; }
+#validatePanel { margin: 0 0 14px; }
+.v-error { color: #ff9dab; background: #2c1a20; border: 1px solid #6e2a38; padding: 6px 10px; border-radius: 6px; margin: 3px 0; font-size: 12px; }
+.v-warning { color: #ffd28a; background: #2c2416; border: 1px solid #6e552a; padding: 6px 10px; border-radius: 6px; margin: 3px 0; font-size: 12px; }
+.v-ok { color: #9fe6b4; background: #162c1d; border: 1px solid #2e6e42; padding: 6px 10px; border-radius: 6px; margin: 3px 0; font-size: 12px; }
+.card-info { background: #121829; border: 1px solid #2a3550; border-radius: 8px; padding: 10px 14px; margin-bottom: 16px; font-size: 12px; color: #9db8e8; line-height: 1.7; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>角色卡编辑器</h1>
+  <a href="index.html">← 世界书编辑器</a>
+  <input type="text" id="filePath" placeholder="角色卡 JSON 路径（绝对路径或相对工作目录）" spellcheck="false">
+  <button id="btnBrowse">浏览…</button>
+  <button class="primary" id="btnOpen">打开</button>
+  <button id="btnNew">新建</button>
+  <button id="btnValidate">校验</button>
+  <button class="primary" id="btnSaveFields">保存基础字段</button>
+  <button id="btnExportPng">导出 PNG</button>
+</header>
+
+<div class="tabs">
+  <button id="tabFields" class="active">基础字段</button>
+  <button id="tabEntries">世界书条目</button>
+</div>
+
+<main>
+  <!-- 基础字段 -->
+  <div id="fieldsPane" class="panel active">
+    <div style="max-width:980px;width:100%">
+      <div class="card-info" id="cardInfo">未打开角色卡。请在上方填写 JSON 路径后点击「打开」，或点「新建」创建一张空白 V3 卡。</div>
+
+      <fieldset>
+        <legend>身份与开场</legend>
+        <div class="field-row">
+          <div class="field"><label>name · 角色名</label><input type="text" id="f_name" spellcheck="false"></div>
+          <div class="field"><label>creator · 作者</label><input type="text" id="f_creator" spellcheck="false"></div>
+          <div class="field"><label>character_version · 版本</label><input type="text" id="f_character_version" spellcheck="false"></div>
+        </div>
+        <div class="field"><label>description · 身份钩子（一句话定位＋外貌＋场景，不展开设定）</label><textarea id="f_description"></textarea></div>
+        <div class="field"><label>personality · 性格基调</label><textarea id="f_personality"></textarea></div>
+        <div class="field"><label>scenario · 当前介入情境</label><textarea id="f_scenario"></textarea></div>
+        <div class="field"><label>first_mes · 默认开场白</label><textarea id="f_first_mes" class="big"></textarea></div>
+        <div class="field"><label>mes_example · 示例对话（DSHT 约定用 &lt;START&gt; 分隔 3 段）</label><textarea id="f_mes_example"></textarea></div>
+      </fieldset>
+
+      <fieldset>
+        <legend>开场白列表</legend>
+        <div id="altList"></div>
+        <button class="small" id="btnAddAlt">＋ 添加备选开场</button>
+        <div class="hint">对应 data.alternate_greetings[]。每段为完整开局正文，建议不替玩家决定言行、留行动空间。</div>
+      </fieldset>
+
+      <fieldset>
+        <legend>提示词与元数据</legend>
+        <div class="field"><label>system_prompt · 系统提示词</label><textarea id="f_system_prompt"></textarea></div>
+        <div class="field"><label>post_history_instructions · 后历史指令</label><textarea id="f_post_history_instructions"></textarea></div>
+        <div class="field"><label>creator_notes · 作者备注</label><textarea id="f_creator_notes"></textarea></div>
+        <div class="field"><label>tags · 标签（逗号分隔）</label><input type="text" id="f_tags" spellcheck="false"><div class="hint">对应 data.tags[]，逗号分隔，保存时自动拆成数组。</div></div>
+        <div class="field"><label>group_only_greetings · 群聊开场（每行一段，一般留空）</label><textarea id="f_group_only_greetings"></textarea></div>
+      </fieldset>
+
+      <fieldset>
+        <legend>内嵌世界书 character_book</legend>
+        <div class="field"><label>name · 世界书名</label><input type="text" id="b_name" spellcheck="false"></div>
+        <div class="field"><label>description · 世界书说明</label><textarea id="b_description"></textarea></div>
+        <div class="hint">条目请切到「世界书条目」标签编辑。条目 CRUD 复用编辑器核心（core.js），写盘为原子写 + 自动备份。</div>
+      </fieldset>
+    </div>
+  </div>
+
+  <!-- 世界书条目 -->
+  <div id="entriesPane" class="panel">
+    <div id="listPane">
+      <input type="text" id="searchBox" placeholder="搜索 comment / content / 触发词…" spellcheck="false">
+      <div class="list-actions">
+        <button class="small primary" id="btnAddEntry">＋ 新增条目</button>
+        <button class="small" id="btnBatchEnable">启用选中</button>
+        <button class="small" id="btnBatchDisable">禁用选中</button>
+        <button class="small danger" id="btnBatchRemove">删除选中</button>
+      </div>
+      <div id="entryList"></div>
+    </div>
+    <div id="detailPane">
+      <div id="validatePanel"></div>
+      <div id="emptyDetail">← 先打开一张角色卡<br>左侧选中条目即可编辑<br>Shift + 点击可多选做批量操作</div>
+      <div id="detailForm" style="display:none">
+        <div class="detail-head">
+          <h2 id="detailTitle">条目</h2>
+          <div style="display:flex;gap:6px">
+            <button class="primary small" id="btnSaveEntry">保存修改</button>
+            <button class="danger small" id="btnDeleteEntry">删除条目</button>
+          </div>
+        </div>
+        <div class="field"><label>comment · 条目标题</label><input type="text" id="e_comment" spellcheck="false"></div>
+        <div class="field"><label>key · 主触发词（逗号分隔）</label><input type="text" id="e_key" spellcheck="false"></div>
+        <div class="field"><label>keysecondary · 次要触发词（逗号分隔）</label><input type="text" id="e_keysecondary" spellcheck="false"></div>
+        <div class="field"><label>content · 正文（LLM 唯一可见字段，主体名词必须写在这里）</label><textarea id="e_content" style="min-height:280px;font-family:Consolas,'Microsoft YaHei',monospace"></textarea></div>
+        <div class="field-row">
+          <div class="field"><label>order · 顺序</label><input type="text" id="e_order"></div>
+          <div class="field"><label>position · 注入位置</label><select id="e_position">
+            <option value="0">0 角色卡之前 (@)</option><option value="1">1 角色卡之后 (#)</option>
+            <option value="2">2 @#</option><option value="3">3 #@</option>
+            <option value="4">4 末尾</option><option value="5">5 开头</option>
+          </select></div>
+          <div class="field"><label>depth · 扫描深度</label><input type="text" id="e_depth"></div>
+          <div class="field"><label>probability · 触发概率 %</label><input type="text" id="e_probability"></div>
+        </div>
+        <div class="field"><label>group · 分组</label><input type="text" id="e_group" spellcheck="false"></div>
+        <div class="checkrow">
+          <div class="checkbox-field"><input type="checkbox" id="e_constant"><label for="e_constant">常驻 constant</label></div>
+          <div class="checkbox-field"><input type="checkbox" id="e_selective"><label for="e_selective">selective</label></div>
+          <div class="checkbox-field"><input type="checkbox" id="e_disable"><label for="e_disable">禁用 disable</label></div>
+          <div class="checkbox-field"><input type="checkbox" id="e_use_regex"><label for="e_use_regex">use_regex</label></div>
+        </div>
+        <div class="hint">保存时自动同步 V3 命名字段（keys / secondary_keys / insertion_order / enabled），并保留条目里其它原有字段。</div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<footer>
+  <span id="fileInfo">未打开文件</span>
+  <span id="countInfo">条目 0</span>
+  <span id="status">就绪</span>
+</footer>
+
+<!-- 文件浏览器 -->
+<div class="modal" id="pickerModal">
+  <div class="modal-box">
+    <h3 id="pickerTitle">选择角色卡 JSON</h3>
+    <div class="picker-bar">
+      <button class="small" id="pickerUp">↑ 上级</button>
+      <input type="text" id="pickerPath" spellcheck="false">
+      <button class="small" id="pickerGo">转到</button>
+    </div>
+    <div class="picker-list" id="pickerList"></div>
+    <div class="modal-actions" style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
+      <button class="small" id="pickerCancel">取消</button>
+      <button class="small primary" id="pickerUsePath">使用当前路径</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const S = {
+  file: null, entries: [], selectedUid: null, selectedIds: new Set(),
+  searchQuery: '', spec: '', pickerMode: 'open', pickerPath: '', pickerCallback: null, sourcePng: null,
+};
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"']/g, m => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[m]));
+
+const TEXT_FIELDS = [
+  'name','description','personality','scenario','first_mes','mes_example',
+  'system_prompt','post_history_instructions','creator_notes','creator','character_version',
+];
+
+async function api(route, body) {
+  const res = await fetch('/api/' + route, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body || {}),
+  });
+  const data = await res.json();
+  if (!data.ok) throw new Error(data.error || '请求失败');
+  return data;
+}
+function status(msg, bad) {
+  $('status').textContent = msg;
+  $('status').className = bad ? 'bad' : '';
+}
+function guard() { if (!S.file) { status('请先打开角色卡', true); throw new Error('未打开角色卡'); } }
+
+// ---------- Tab ----------
+function switchTab(which) {
+  $('tabFields').classList.toggle('active', which === 'fields');
+  $('tabEntries').classList.toggle('active', which === 'entries');
+  $('fieldsPane').classList.toggle('active', which === 'fields');
+  $('entriesPane').classList.toggle('active', which === 'entries');
+}
+$('tabFields').onclick = () => switchTab('fields');
+$('tabEntries').onclick = () => switchTab('entries');
+
+// ---------- 基础字段渲染 ----------
+function renderAltList(arr) {
+  const box = $('altList');
+  box.innerHTML = '';
+  (arr || []).forEach((txt, i) => {
+    const d = document.createElement('div');
+    d.className = 'list-editor-item';
+    d.innerHTML = '<div class="idx"><span>alternate_greetings[' + i + ']</span>' +
+      '<button class="small danger" data-i="' + i + '">删除</button></div>' +
+      '<textarea data-i="' + i + '" spellcheck="false"></textarea>';
+    d.querySelector('textarea').value = txt || '';
+    d.querySelector('button').onclick = () => {
+      const t = $('altList').querySelectorAll('textarea');
+      const vals = Array.from(t).map(x => x.value);
+      vals.splice(i, 1);
+      renderAltList(vals);
+    };
+    box.appendChild(d);
+  });
+  if (!(arr || []).length) box.innerHTML = '<div class="hint" style="margin-bottom:8px">（暂无备选开场）</div>';
+}
+$('btnAddAlt').onclick = () => {
+  const vals = Array.from($('altList').querySelectorAll('textarea')).map(x => x.value);
+  vals.push('');
+  renderAltList(vals);
+};
+
+function fillFields(f) {
+  for (const k of TEXT_FIELDS) $('f_' + k).value = f[k] || '';
+  $('f_tags').value = (f.tags || []).join(', ');
+  $('f_group_only_greetings').value = (f.group_only_greetings || []).join('\n\n');
+  renderAltList(f.alternate_greetings || []);
+  $('b_name').value = f.book?.name || '';
+  $('b_description').value = f.book?.description || '';
+}
+
+function collectFields() {
+  const f = {};
+  for (const k of TEXT_FIELDS) f[k] = $('f_' + k).value;
+  f.tags = $('f_tags').value.split(',').map(s => s.trim()).filter(Boolean);
+  f.group_only_greetings = $('f_group_only_greetings').value.split(/\n\s*\n/).map(s => s.trim()).filter(Boolean);
+  f.alternate_greetings = Array.from($('altList').querySelectorAll('textarea')).map(x => x.value);
+  f.book = { name: $('b_name').value, description: $('b_description').value };
+  return f;
+}
+
+// ---------- 打开 / 新建 ----------
+async function reloadCard() {
+  const r = await api('card/open', { file: S.file });
+  S.entries = r.entries;
+  S.spec = r.spec;
+  fillFields(r.fields);
+  $('cardInfo').innerHTML =
+    '格式：<b>' + esc(r.spec) + (r.specVersion ? ' / ' + esc(r.specVersion) : '') + '</b>' +
+    (r.wrapper ? ' · 包装：<b>' + esc(r.wrapper) + '</b>' : '') +
+    ' · 内嵌世界书条目 <b>' + r.count + '</b> 条' +
+    (r.extraDataKeys.length ? '<br>未在本页展示、保存时原样保留的 data 字段：' + esc(r.extraDataKeys.join(', ')) : '') +
+    '<br>写盘经原子写入（临时文件 + rename），每次实际改动前自动备份到同目录 backups/。';
+  $('fileInfo').textContent = S.file;
+  $('countInfo').textContent = '条目 ' + r.count;
+  renderList();
+  renderValidation(r);
+  status('已打开：' + r.count + ' 条世界书条目');
+}
+
+async function openFile(p) {
+  try {
+    const r = await api('card/open', { file: p });
+    S.file = r.file;
+    S.sourcePng = r.sourcePng || null;
+    $('filePath').value = r.file;
+    S.selectedUid = null; S.selectedIds.clear();
+    await reloadCard();
+    if (S.sourcePng) status('已打开 PNG 角色卡（源：' + S.sourcePng + '；编辑存于工作副本，点「导出 PNG」生成新卡）');
+  } catch (e) { status('打开失败：' + e.message, true); }
+}
+
+$('btnOpen').onclick = () => {
+  const p = $('filePath').value.trim();
+  if (!p) { status('请填写文件路径', true); return; }
+  openFile(p);
+};
+$('filePath').onkeydown = e => { if (e.key === 'Enter') $('btnOpen').click(); };
+
+$('btnNew').onclick = () => pickerOpen(async p => {
+  const name = prompt('新角色卡名称：', '新角色卡');
+  if (name === null) return;
+  try {
+    const r = await api('card/create', { file: p, name });
+    status('已新建：' + (r.file || p));
+    await openFile(r.file || p);
+    switchTab('fields');
+  } catch (e) { status('新建失败：' + e.message, true); }
+}, 'new');
+
+$('btnSaveFields').onclick = async () => {
+  try {
+    guard();
+    const r = await api('card/save-fields', { file: S.file, fields: collectFields() });
+    status(r.unchanged ? '基础字段无变化，未写盘' : '基础字段已保存' + (r.backupPath ? '（已自动备份）' : ''));
+  } catch (e) { status('保存失败：' + e.message, true); }
+};
+
+// 导出 PNG 角色卡：先把基础字段存进工作副本，再向 server 请求 PNG 二进制并触发浏览器下载。
+// 封面：若源是 PNG 则自动沿用源图（image=S.sourcePng），否则用空白底图。
+async function exportPngCard() {
+  guard();
+  if (!S.file) { status('请先打开一张角色卡', true); return; }
+  await api('card/save-fields', { file: S.file, fields: collectFields() }); // 确保最新字段进入工作副本
+  const name = ($('f_name').value.trim() || 'card').replace(/[\\/:*?"<>|]/g, '_');
+  const res = await fetch('/api/card/export-png', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ file: S.file, image: S.sourcePng || null, name }),
+  });
+  if (!res.ok) {
+    let msg = '导出失败（HTTP ' + res.status + '）';
+    try { const t = await res.json(); if (t && t.message) msg = t.message; } catch (e) {}
+    throw new Error(msg);
+  }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = name + '.png';
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+  status('已导出 PNG 角色卡：' + name + '.png' + (S.sourcePng ? '（沿用源 PNG 封面）' : '（无封面）'));
+}
+$('btnExportPng').onclick = () => exportPngCard().catch(e => status('导出失败：' + e.message, true));
+
+$('btnValidate').onclick = async () => {
+  try {
+    guard();
+    const r = await api('card/validate', { file: S.file });
+    renderValidation(r);
+    status(r.valid ? '校验通过' : '校验发现 ' + r.errors.length + ' 个错误', !r.valid);
+    switchTab('entries');
+  } catch (e) { status('校验失败：' + e.message, true); }
+};
+
+function renderValidation(r) {
+  const box = $('validatePanel');
+  let h = '';
+  if (r.valid) h += '<div class="v-ok">校验通过：结构完整，无错误</div>';
+  (r.errors || []).forEach(e => { h += '<div class="v-error">✗ ' + esc(e.message || e) + '</div>'; });
+  (r.warnings || []).forEach(w => { h += '<div class="v-warning">⚠ ' + esc(w.message || w) + '</div>'; });
+  box.innerHTML = h;
+}
+
+// ---------- 条目列表 ----------
+function renderList() {
+  const q = S.searchQuery.toLowerCase();
+  const items = S.entries.filter(e => !q ||
+    (e.comment || '').toLowerCase().includes(q) ||
+    (e.content || '').toLowerCase().includes(q) ||
+    (e.key || []).some(k => k.toLowerCase().includes(q)));
+  const listEl = $('entryList');
+  listEl.innerHTML = '';
+  if (!items.length) { listEl.innerHTML = '<div class="hint" style="text-align:center;margin-top:30px">没有条目</div>'; return; }
+  for (const e of items) {
+    const d = document.createElement('div');
+    d.className = 'entry-item' + (e.uid === S.selectedUid ? ' active' : '') + (S.selectedIds.has(e.uid) ? ' selected' : '');
+    d.innerHTML = '<div class="row1"><span class="uid">#' + e.uid + '</span>' +
+      '<span class="comment">' + esc(e.comment || '(无注释)') + '</span><span>' +
+      (e.constant ? '<span class="tag const">常驻</span> ' : '') +
+      (e.disable ? '<span class="tag disabled">禁用</span>' : '') + '</span></div>' +
+      '<div class="keys">⟦' + esc((e.key || []).join(', ') || '无触发词') + '⟧ · ' + (e.order || 0) + '</div>';
+    d.onclick = ev => {
+      if (ev.shiftKey) {
+        if (S.selectedIds.has(e.uid)) S.selectedIds.delete(e.uid); else S.selectedIds.add(e.uid);
+        renderList(); return;
+      }
+      selectEntry(e.uid);
+    };
+    listEl.appendChild(d);
+  }
+}
+$('searchBox').oninput = e => { S.searchQuery = e.target.value; renderList(); };
+
+function selectEntry(uid) {
+  S.selectedUid = uid;
+  const e = S.entries.find(x => x.uid === uid);
+  if (!e) return;
+  renderList();
+  $('emptyDetail').style.display = 'none';
+  $('detailForm').style.display = 'block';
+  $('detailTitle').textContent = '条目 #' + e.uid + ' — ' + (e.comment || '无注释');
+  $('e_comment').value = e.comment || '';
+  $('e_key').value = (e.key || []).join(', ');
+  $('e_keysecondary').value = (e.keysecondary || []).join(', ');
+  $('e_content').value = e.content || '';
+  $('e_order').value = e.order ?? 100;
+  $('e_position').value = e.position ?? 0;
+  $('e_depth').value = e.depth ?? 4;
+  $('e_probability').value = e.probability ?? 100;
+  $('e_group').value = e.group || '';
+  $('e_constant').checked = !!e.constant;
+  $('e_selective').checked = !!e.selective;
+  $('e_disable').checked = !!e.disable;
+  $('e_use_regex').checked = !!e.use_regex;
+}
+
+function entryFields() {
+  return {
+    comment: $('e_comment').value,
+    key: $('e_key').value.split(',').map(s => s.trim()).filter(Boolean),
+    keysecondary: $('e_keysecondary').value.split(',').map(s => s.trim()).filter(Boolean),
+    content: $('e_content').value,
+    order: Number($('e_order').value),
+    position: Number($('e_position').value),
+    depth: Number($('e_depth').value),
+    probability: Number($('e_probability').value),
+    group: $('e_group').value,
+    constant: $('e_constant').checked,
+    selective: $('e_selective').checked,
+    disable: $('e_disable').checked,
+    use_regex: $('e_use_regex').checked,
+  };
+}
+
+$('btnSaveEntry').onclick = async () => {
+  try {
+    guard();
+    if (S.selectedUid === null) { status('请先选中条目', true); return; }
+    await api('card/update-entry', { file: S.file, uid: S.selectedUid, fields: entryFields() });
+    await reloadCard();
+    status('条目 #' + S.selectedUid + ' 已保存（已自动备份）');
+  } catch (e) { status('保存失败：' + e.message, true); }
+};
+
+$('btnAddEntry').onclick = async () => {
+  try {
+    guard();
+    const r = await api('card/add-entry', { file: S.file, fields: { comment: '新条目', key: [], content: '' } });
+    await reloadCard();
+    S.selectedUid = r.uid; selectEntry(r.uid);
+    status('已新增条目 #' + r.uid);
+  } catch (e) { status('新增失败：' + e.message, true); }
+};
+
+$('btnDeleteEntry').onclick = async () => {
+  try {
+    guard();
+    if (S.selectedUid === null) return;
+    if (!confirm('确认删除条目 #' + S.selectedUid + '？删除前会自动备份。')) return;
+    await api('card/remove-entry', { file: S.file, uid: S.selectedUid });
+    const gone = S.selectedUid;
+    S.selectedUid = null;
+    await reloadCard();
+    $('detailForm').style.display = 'none';
+    $('emptyDetail').style.display = 'block';
+    status('已删除条目 #' + gone);
+  } catch (e) { status('删除失败：' + e.message, true); }
+};
+
+async function doBatch(action) {
+  try {
+    guard();
+    const ids = Array.from(S.selectedIds);
+    if (!ids.length) { status('请先 Shift + 点击选中条目', true); return; }
+    if (action === 'remove' && !confirm('确认删除选中的 ' + ids.length + ' 条条目？')) return;
+    await api('card/batch', { file: S.file, ids, action });
+    S.selectedIds.clear(); S.selectedUid = null;
+    await reloadCard();
+    status('批量操作完成：' + action + ' × ' + ids.length);
+  } catch (e) { status('批量失败：' + e.message, true); }
+}
+$('btnBatchEnable').onclick = () => doBatch('enable');
+$('btnBatchDisable').onclick = () => doBatch('disable');
+$('btnBatchRemove').onclick = () => doBatch('remove');
+
+// ---------- 文件浏览器 ----------
+function pickerOpen(cb, mode) {
+  S.pickerCallback = cb;
+  S.pickerMode = mode || 'open';
+  $('pickerTitle').textContent = S.pickerMode === 'new' ? '选择新建角色卡的保存位置' : '选择角色卡 JSON';
+  $('pickerUsePath').textContent = S.pickerMode === 'new' ? '在此目录新建…' : '使用当前路径';
+  $('pickerModal').classList.add('show');
+  let cur = $('filePath').value.trim();
+  // 新建模式下若输入框里已是某个文件，先定位到它所在目录
+  if (S.pickerMode === 'new' && cur && /\.(json|png)$/i.test(cur)) cur = cur.replace(/[\\/][^\\/]+$/, '');
+  pickerLoad(cur || '');
+}
+async function pickerLoad(p) {
+  try {
+    const r = await api('dir', { path: p });
+    S.pickerPath = r.path;
+    $('pickerPath').value = r.path;
+    const box = $('pickerList');
+    box.innerHTML = '';
+    if (r.parent) {
+      const up = document.createElement('div');
+      up.className = 'picker-item dir';
+      up.innerHTML = '<span class="ic">↑</span><span class="nm">..（上级目录）</span>';
+      up.onclick = () => pickerLoad(r.parent);
+      box.appendChild(up);
+    }
+    for (const d of r.dirs) {
+      const it = document.createElement('div');
+      it.className = 'picker-item dir';
+      it.innerHTML = '<span class="ic">▸</span><span class="nm">' + esc(d) + '</span>';
+      it.onclick = () => pickerLoad(r.path.replace(/[\\/]$/, '') + '/' + d);
+      box.appendChild(it);
+    }
+    for (const f of r.files) {
+      if (f.ext !== '.json' && f.ext !== '.png') continue; // 本页编辑 JSON / PNG 角色卡
+      const it = document.createElement('div');
+      it.className = 'picker-item';
+      it.innerHTML = '<span class="ic">·</span><span class="nm">' + esc(f.name) + '</span><span class="sz">' + Math.round(f.size / 1024) + ' KB</span>';
+      const full = r.path.replace(/[\\/]$/, '') + '/' + f.name;
+      it.onclick = () => {
+        $('pickerModal').classList.remove('show');
+        if (S.pickerCallback) S.pickerCallback(full);
+      };
+      box.appendChild(it);
+    }
+    if (!box.children.length) box.innerHTML = '<div class="picker-empty">该目录没有可选内容</div>';
+  } catch (e) {
+    $('pickerList').innerHTML = '<div class="picker-empty">' + esc(e.message) + '</div>';
+  }
+}
+$('btnBrowse').onclick = () => pickerOpen(p => { $('filePath').value = p; openFile(p); }, 'open');
+$('pickerUp').onclick = () => {
+  const p = S.pickerPath.replace(/[\\/][^\\/]+[\\/]?$/, '');
+  pickerLoad(p);
+};
+$('pickerGo').onclick = () => pickerLoad($('pickerPath').value.trim());
+$('pickerCancel').onclick = () => $('pickerModal').classList.remove('show');
+$('pickerUsePath').onclick = () => {
+  const p = $('pickerPath').value.trim().replace(/[\\/]$/, '');
+  $('pickerModal').classList.remove('show');
+  if (S.pickerMode === 'new') {
+    const fname = prompt('新建角色卡文件名：', '新角色卡.json');
+    if (fname === null) return;
+    const full = p + '/' + (/\.json$/i.test(fname) ? fname : fname + '.json');
+    if (S.pickerCallback) S.pickerCallback(full);
+  } else {
+    // 打开模式：把当前路径回填到输入框，便于继续补文件名
+    $('filePath').value = p;
+    status('路径已填入，请补全文件名后点「打开」');
+  }
+};
+
+// ---------- 启动 ----------
+fetch('/api/ping', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
+  .then(r => r.json())
+  .then(r => { if (r.ok) status('服务已连接，工作目录：' + r.cwd); })
+  .catch(() => status('服务未连接', true));
+</script>
+</body>
+</html>

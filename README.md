@@ -102,6 +102,16 @@ node bin\wbedit.js serve --port 8080 --open
 2. 左侧列表：点击查看/编辑，Shift+点击多选（批量启用/禁用/删除）
 3. 右侧表单：编辑 comment / key / content 及全部 42 字段，点「保存修改」
 4. 顶部按钮：「新建」「校验」「导入」「导出」
+5. 顶部右侧「角色卡编辑 →」进入角色卡编辑页面
+
+### 角色卡编辑页面（`card.html`）
+
+访问 `http://127.0.0.1:8080/card.html`（或点世界书编辑器右上角的「角色卡编辑 →」）。
+
+- 支持 **SillyTavern V3**（`{spec, data:{...}}`）、**DSH 工作副本**（`{raw:{spec,data}, meta}`）与 **V2 顶层卡**；保留原有包装与未知字段。
+- 「基础字段」标签：编辑 `name / description / personality / scenario / first_mes / mes_example / system_prompt / post_history_instructions / creator_notes / creator / character_version`，以及 `tags`、`alternate_greetings`（可增删）、`group_only_greetings` 与内嵌世界书的 `name / description`。
+- 「世界书条目」标签：编辑卡内 `character_book.entries[]`（新增／修改／删除／批量启用禁用／校验）。条目 CRUD 复用 `core.js`，写回时以原 V3 条目为基底做字段映射（`key↔keys`、`disable↔enabled`、`order↔insertion_order`），**不重建条目、不丢 uid、不膨胀字段**。
+- 每次实际写盘都是原子写入 + 写前自动备份到 `backups/`；无变化不写盘、不产生备份。
 
 ## 格式说明
 
@@ -165,8 +175,10 @@ node test\test-all.js
 │   ├── core.js       读写 / CRUD / 搜索 / 批量（原子写入）
 │   ├── validate.js   校验（结构/冲突/LLM 可见性铁律）
 │   ├── io.js         导入导出（PNG chunk 解析 / 生成）
+│   ├── card.js       角色卡结构化编辑（V3/工作副本/V2 兼容，原子写 + 备份）
 │   └── server.js     Web 服务（REST API + 静态页面）
-├── web/index.html    Web 界面（单文件）
+├── web/index.html    世界书编辑界面（单文件）
+├── web/card.html     角色卡编辑界面（单文件）
 └── package.json
 ```
 

@@ -1,6 +1,6 @@
 ---
 name: worldbook-editor
-description: 世界书编辑器（Node.js 独立工具）使用指南。当需要编辑/创建/校验/导入导出 SillyTavern V3 或 DSH-Tavern 世界书（JSON 或 PNG 角色卡）时使用。提供结构化 CLI 与 Web 双模式，防止直接改 JSON 把结构写坏。适用于：新增/修改/删除/搜索世界书条目、批量启用禁用、格式校验（含 LLM 可见性铁律）、从角色卡导入世界书、把世界书打包成角色卡 PNG。
+description: 世界书编辑器（Node.js 独立工具）使用指南。当需要编辑/创建/校验/导入导出 SillyTavern V3 或 DSH-Tavern 世界书（JSON 或 PNG 角色卡）、或编辑角色卡基础字段与卡内世界书时使用。提供结构化 CLI 与 Web 双模式（含 /card.html 角色卡编辑页面），防止直接改 JSON 把结构写坏。适用于：新增/修改/删除/搜索世界书条目、批量启用禁用、格式校验（含 LLM 可见性铁律）、从角色卡导入世界书、把世界书打包成角色卡 PNG、编辑 V3 卡片 name/description/first_mes/alternate_greetings 等字段。
 ---
 
 # 世界书编辑器（Worldbook Editor）
@@ -103,6 +103,17 @@ node wbedit.js renumber-uid wb.json --by uid --start 1
 - 校验面板展示错误/警告；搜索框实时过滤
 - REST API：`POST /api/list|get|create|add|update|remove|batch|meta|search|validate|import|export|dir`（`meta` 传 `{file, name?, description?}`，不传字段只读当前值）
 
+### 角色卡编辑页面 `/card.html`
+
+`http://127.0.0.1:8080/card.html`，或在世界书界面点右上角「角色卡编辑 →」。
+
+- 用于直接编辑**角色卡 JSON**（V3 `data` 包装 / DSH 工作副本 `raw.data` / V2 顶层卡），不只是里面的世界书。
+- 「基础字段」：`name/description/personality/scenario/first_mes/mes_example/system_prompt/post_history_instructions/creator_notes/creator/character_version`、`tags`、`alternate_greetings`（动态增删）、`group_only_greetings`、内嵌 `character_book.name/description`。
+- 「世界书条目」：编辑卡内 `character_book.entries[]`，支持新增/修改/删除/批量启用禁用/校验。
+- REST API：`POST /api/card/open|save-fields|add-entry|update-entry|remove-entry|batch|validate|create`（body 统一带 `file`）。
+- **铁律同样适用**：条目 CRUD 经 `core.js`，写盘原子写 + 写前自动备份；写回时以原 V3 条目为基底做字段映射，**不重建、不丢 uid、不膨胀字段、不碰未编辑字段**。
+- ⚠️ CLI `import` 对 JSON 只认顶层 `character_book`，**不能**用来读标准 V3 卡；要编辑 V3 卡请用本页面或 `/api/card/*`。
+
 ## 数据格式要点（必须遵守）
 
 - **经典格式**：`{ name?, entries: { "<uid>": 条目 } }`（DSH-Tavern 独立世界书）
@@ -114,7 +125,7 @@ node wbedit.js renumber-uid wb.json --by uid --start 1
 
 ## 操作约定
 
-1. **所有写操作必须走本工具**（CLI / Web API），禁止直接 `JSON.parse` + 改字段 + `writeFile` 裸覆盖
+1. **所有写操作必须走本工具**（CLI / Web API / `card.js`），禁止直接 `JSON.parse` + 改字段 + `writeFile` 裸覆盖；编辑角色卡基础字段或卡内世界书同样必须走 `/api/card/*`
 2. 修改条目用 `update` 传字段名；布尔字段传 `true/false`；数组字段（key/keysecondary/triggers）用逗号分隔
 3. `validate` 通过后再交付；校验输出区分 `[错误]`（致命）与 `[警告]`
 4. 每次改完运行 `node test\test-all.js`（57 断言）做回归

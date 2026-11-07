@@ -37,10 +37,11 @@ function help() {
                                      重排条目顺序（物理顺序 + 可选重编 order）
   renumber-uid <文件> [--start N] [--by order|uid] [--renumber-order M] [--dry-run]
                                      把条目 uid 重编为连续 N,N+1,…（可选同步重编 order）
-  export <文件> [--type classic|st3|png] [--out 路径]
-                                     导出（classic=原样 / st3=character_book / png=角色卡PNG）
+  export <文件> [--type classic|st3|png] [--out 路径] [--image 底图.png]
+                                     导出（classic=原样 / st3=character_book / png=角色卡PNG；png 可用 --image 指定封面）
   import <来源> [--out 路径]         导入世界书（JSON 或角色卡 PNG/JSON；--out 缺省 导入/<文件名>.json）
   serve [--port 8080] [--open|--no-browser]   启动 Web 编辑界面（别名 web）
+                                     /        世界书编辑  /card.html  角色卡编辑
   help                                显示本帮助
 
 示例:
@@ -304,9 +305,9 @@ async function main() {
       let out = flags.out;
       if (type === 'png') {
         out = out || path.join(path.dirname(positional[1]), (wb.name || '世界书') + '.png');
-        const png = io.toPng(wb);
+        const png = io.toPng(wb, flags.image);
         fs.writeFileSync(out, png);
-        console.log('已导出 PNG: ' + out);
+        console.log('已导出 PNG: ' + out + (flags.image ? '（封面: ' + flags.image + '）' : '（未指定封面，使用空白底图）'));
       } else {
         const text = io.exportWorldbook(wb, type);
         if (out) { fs.writeFileSync(out, text, 'utf8'); console.log('已导出: ' + out); }
